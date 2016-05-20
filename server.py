@@ -15,14 +15,15 @@
 #from bottle import route, run
 import time
 import json
-import logging
 import hashlib
 import base64
 import bottle
 import cork
 import rsa
 from beaker.middleware import SessionMiddleware
+import zclog
 
+_logger = zclog.getLogger(__name__)
 aaa = cork.Cork("admin_conf")
 app = bottle.app()
 session_opts = {
@@ -141,13 +142,34 @@ def qqzc_init(name):
         _dbman.add_phones(name, numbers)
     return 'ok'
 
-@bottle.route('/1/<name>/2', method='post')
+@bottle.route('/1/<name>/2')
 def qqzc_smsvc(name):
     """send back sms verify code"""
     # 1. check username
     if not _dbman.user_exist(name):
         return 'not exist.'
-    
+
+    # 2. query which phone need to receive sms
+    smsvc = _dbman.query_smsvc_usr(name, status=1)
+    if smsvc is None or len(smsvc) == 0:
+        return 'ok'
+
+    #_logger.info('smsvc: %s', smsvc);
+    L = []
+    for sv in smsvc:
+        if sv is None:
+            continue
+        _logger.info('need send smsvc phone: %s', sv.phone)
+        b1 = int(sv.phone).to_bytes(6, 'big')
+        b1 += b':'
+        b1 += str(sv.id_).encode()
+        L.append(b1)
+    if len(L) > 0:
+        bs = base64.b64encode(b','.join(L))
+        _logger.info('return %s', bs)
+        return bs
+    return 'ok'
+
     # 2. sms verify code:
     #    >>> import base64
     #    >>> n = base64.b64encode(code.to_bytes(6, 'big')
@@ -158,12 +180,12 @@ def qqzc_smsvc(name):
     c = bottle.request.forms.get('c')
     i = bottle.request.forms.get('i')
 
-    logging.info('n=%s, c=%s, i=%s', n, c, i)
+    _logger.info('n=%s, c=%s, i=%s', n, c, i)
 
     try:
         id_ = int(i)
     except ValueError:
-        logging.warn('action id wrong: %s', i)
+        _logger.warn('action id wrong: %s', i)
         return 'action id invalid'
 
     try:
@@ -173,7 +195,7 @@ def qqzc_smsvc(name):
 
         phone = str(int.from_bytes(phone, 'big'))
     except Exception as e:
-        logging.error(e)
+        _logger.error(e)
         return 'verify code error'
     else:
         # TODO send to QQReg object
@@ -196,6 +218,7 @@ def qqzc_report(name):
 
     # 3. TODO send back seccessful registrations TODAY
     return 'ok'
+
 
 _dev_session = {}
 _dev_challenge = {}
@@ -277,7 +300,7 @@ def qqzc_dev_requestsmsvc(dev):
     if ids is None:
         return 'fail'
     s = json.dumps(ids)
-    logging.info('sms request ids: %s', s)
+    _logger.info('sms request ids: %s', s)
     return s
 
 @bottle.route('/1/<dev>/7')
@@ -286,7 +309,7 @@ def qqzc_dev_getsmsvc(dev):
     # 1. check session
     if 0 != dev_check_session(dev, bottle.request):
         return 'failed'
-    smsvc = _dbman.query_smsvc(dev)
+    smsvc = _dbman.query_smsvc_dev(dev)
 
     l = []
 
@@ -294,7 +317,7 @@ def qqzc_dev_getsmsvc(dev):
         l.append({'phone':v.phone, 'code':v.code})
 
     s = json.dumps(smsvc)
-    logging.info('smsvc response: %s', s)
+    _logger.info('smsvc response: %s', s)
     return s
 
 @bottle.route('/1/<dev>/8', method='post')
@@ -340,7 +363,7 @@ def qqzc_dev_getuin(dev):
             ucountry, uprovince, ucity, 
             ubirth, ugender, uphone, 
             unongli, uregion, ip, dev)
-    logging.info('add %s to database', uin)
+    _logger.info('add %s to database', uin)
     if ok:
         return 'ok'
     return 'fail'

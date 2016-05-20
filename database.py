@@ -4,13 +4,15 @@
 """Database connection.
 """
 
-import logging
+import zclog
 from datetime import datetime
 import sqlalchemy
 import sqlalchemy.ext.declarative 
 from sqlalchemy import Column, ForeignKey, MetaData, Table
 from sqlalchemy.types import VARCHAR, Integer, DATETIME
 from sqlalchemy.orm import mapper, sessionmaker
+
+_logger = zclog.getLogger(__name__)
 
 BaseModel = sqlalchemy.ext.declarative.declarative_base()
 
@@ -120,7 +122,7 @@ class QzcSmsvc(BaseModel):
         self.status = 0
 
 class QzcUin(BaseModel):
-    __tablename__ == 'uin'
+    __tablename__ = 'uin'
     uin         = Column('uin', VARCHAR(100), primary_key=True)
     password    = Column('password', VARCHAR(100)) 
     nick        = Column('nick', VARCHAR(100)) 
@@ -228,7 +230,7 @@ class QzcDatabaseManager(object):
             self.session.commit()
         except Exception as e:
             self.session.rollback()
-            logging.error(e)
+            _logger.error(e)
             return False
         else:
             return True
@@ -257,7 +259,7 @@ class QzcDatabaseManager(object):
         try:
             self.session.commit()
         except Exception as e:
-            logging.error(e)
+            _logger.error(e)
             self.session.rollback()
             return False
         else:
@@ -275,21 +277,21 @@ class QzcDatabaseManager(object):
         #act = query.filter_by(phone=phone, uname=uname).first()
 
         #if act is None:
-        #    logging.warn('Action(phone=%s, name=%s) not in this database', phone, uname)
+        #    _logger.warn('Action(phone=%s, name=%s) not in this database', phone, uname)
         #    return False
 
         #return True
         query = self.session.query(QzcSmsvc)
         record = query.filter_by(id_=act_id).first()
 
-        logging.info('phone=%s, smsvc=%s, id_=%d, status=%d', phone, smsvc, act_id, record.status)
+        _logger.info('phone=%s, smsvc=%s, id_=%d, status=%d', phone, smsvc, act_id, record.status)
 
         record.code = smsvc
         record.status = 1 # update status
         try:
             self.session.commit()
         except Exception as e:
-            logging.error(e)
+            _logger.error(e)
             self.session.rollback()
             return False
         else:
@@ -309,7 +311,7 @@ class QzcDatabaseManager(object):
             self.session.commit()
         except Exception as e:
             self.session.rollback()
-            logging.error(e)
+            _logger.error(e)
             return False
         else:
             return True
@@ -326,7 +328,7 @@ class QzcDatabaseManager(object):
             self.session.commit()
         except Exception as e:
             self.session.rollback()
-            logging.error(e)
+            _logger.error(e)
             return 
         else:
             # return True
@@ -341,7 +343,7 @@ class QzcDatabaseManager(object):
             self.session.add_all(smsreq_list)
             self.session.commit()
         except Exception as e:
-            logging.error(e)
+            _logger.error(e)
             self.session.rollback()
             return 
         else:
@@ -349,7 +351,7 @@ class QzcDatabaseManager(object):
 
         return [smsreq.id_ for smsreq in smsreq_list]
 
-    def query_smsvc(self, devname):
+    def query_smsvc_dev(self, devname):
         # query smsvc table where devname=devname and status=1
         # status code:
         #   0: waiting to get smsvc code
@@ -364,7 +366,7 @@ class QzcDatabaseManager(object):
         try:
             self.session.commit()
         except Exception as e:
-            logging.error(e)
+            _logger.error(e)
             self.session.rollback()
             return 
         else:
@@ -383,13 +385,27 @@ class QzcDatabaseManager(object):
             self.session.add(uin)
             self.commit()
         except Exception as e:
-            logging.error(e)
+            _logger.error(e)
             self.session.rollback()
             return False
         else:
             return True
 
+    def query_smsvc_usr(self, name, status):
+        # 1. query phone numbers
+        _logger.info('query name %s', name)
+        query1 = self.session.query(QzcUserPhones)
+        phones = query1.filter_by(uname=name).all()
 
+        _logger.info('user %s phones: %s', name, phones)
+
+        # 2. query smsvc
+        query2 = self.session.query(QzcSmsvc)
+        # in very rare cases, one phone may receive more than one smsvc
+        # and how should we handle that?
+        smsvc = [query2.filter_by(phone=p.phone, status=status).first() for p in phones]
+        _logger.info('smsvc list: %s', smsvc)
+        return smsvc
     
     def close(self):
         self.session.close()
