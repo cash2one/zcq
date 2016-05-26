@@ -95,3 +95,15 @@ CREATE TABLE uin(
     PRIMARY KEY(uin)
 );
 
+CREATE TABLE smstext(
+    id INT UNSIGNED NOT NULL auto_increment,
+    time DATETIME,
+    sfrom VARCHAR(80),
+    sto VARCHAR(80),
+    text VARCHAR(10240),
+    com VARCHAR(10),
+    uname VARCHAR(20),
+    PRIMARY KEY(id),
+    FOREIGN KEY(uname) REFERENCES users(name)
+);
+

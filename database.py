@@ -39,12 +39,20 @@ class QzcUsers(BaseModel):
     #def __str__(self):
     #    return self.__repr__()
     
-class QZcUserLogins(BaseModel):
+class QzcUserLogins(BaseModel):
     __tablename__ = 'logins'
     id_ = Column('id', Integer, primary_key=True)
     logdate = Column('logdate', DATETIME)
     ip = Column('ip', VARCHAR(20))
     uname = Column('uname', VARCHAR(20), ForeignKey('users.name'))
+
+    def __init__(self, name, ip):
+        self.logdate = datetime.now()
+        self.uname = name
+        self.ip = ip
+
+    def __repr__(self):
+        return 'QzcUserLogins(name={}, ip={}, date={})'.format(self.uname, self.ip, self.date)
     
 class QzcUserPhones(BaseModel):
     __tablename__ = 'userphones'
@@ -97,6 +105,38 @@ class QzcDevs(BaseModel):
 
     def __repr__(self):
         return 'Device(name={}, uuid={})'.format(self.dname, self.duuid)
+
+class QzcSmsText(BaseModel):
+    __tablename__ = 'smstext'
+    id_             = Column('id',          Integer, primary_key=True)
+    rtime           = Column('time',        DATETIME)
+    sfrom           = Column('sfrom',       VARCHAR(80))
+    sto             = Column('sto',         VARCHAR(80))
+    text            = Column('text',        VARCHAR(10240))
+    com             = Column('com',         VARCHAR(10))
+    uname           = Column('uname',       VARCHAR(20), ForeignKey('users.name'))
+    
+    def __init__(self, uname, rtime, sfrom, sto, text, com=''):
+        self.uname  = uname
+        self.rtime  = rtime
+        self.sfrom  = sfrom
+        self.sto    = sto
+        self.text   = text
+        self.com    = com
+
+    def __repr__(self):
+        return 'QzcSmsText({}->{})'.format(self.sfrom, self.sto)
+
+    def __eq__(self, other):
+        if not isinstance(other, QzcSmsText):
+            return False
+        if (self.uname == other.uname 
+                and self.rtime == other.rtime
+                and self.sfrom == other.sfrom
+                and self.sto == other.sto
+                and self.text == other.text):
+            return True
+        return False
 
 class QzcSmsvc(BaseModel):
     __tablename__ = 'smsvc'
@@ -172,10 +212,10 @@ class QzcDatabaseManager(object):
         self.db_pass = db_pass
         self.db_name = db_name
         
-        uri = "{}://{}:{}@{}:{}/{}".format(db_type, db_user, db_pass, db_host, db_port, db_name)
+        uri = "{}://{}:{}@{}:{}/{}?charset=utf8".format(db_type, db_user, db_pass, db_host, db_port, db_name)
         print(uri)
         
-        self.engine       = sqlalchemy.create_engine(uri)
+        self.engine       = sqlalchemy.create_engine(uri, encoding='utf-8')
         #self.connection  = self.engine.connect()
         self.metadata     =  MetaData(self.engine)
         self.users_table  = Table('users',      self.metadata, autoload=True)
@@ -185,14 +225,16 @@ class QzcDatabaseManager(object):
         self.device_table = Table('devices',    self.metadata, autoload=True)
         self.smsvc_table  = Table('smsvc',      self.metadata, autoload=True)
         self.uin_table    = Table('uin',        self.metadata, autoload=True)        
+        self.smstext_table= Table('smstext',    self.metadata, autoload=True)        
 
         #mapper(QzcUsers,        self.users_table)
-        #mapper(QZcUserLogins,   self.login_table)
+        #mapper(QzcUserLogins,   self.login_table)
         #mapper(QzcUserPhones,   self.phone_table)
         #mapper(QzcActions,      self.action_table)
         #mapper(QzcDevs,         self.device_table)
         #mapper(QzcSmsvc,        self.smsvc_table)
         #mapper(QzcUin,          self.uin_table)
+        #mapper(QzcSmsText,      self.smstext_table)
         
         self.session = sessionmaker(bind=self.engine)()
     
@@ -406,6 +448,52 @@ class QzcDatabaseManager(object):
         smsvc = [query2.filter_by(phone=p.phone, status=status).first() for p in phones]
         _logger.info('smsvc list: %s', smsvc)
         return smsvc
+
+    def user_login(self, name, ip):
+        ul = QzcUserLogins(name, ip)
+        try:
+            self.session.add(ul)
+            self.session.commit()
+        except Exception as e:
+            _logger.error(e)
+            self.session.rollback()
+            return False
+        else:
+            return True
+
+    def add_smstext(self, name, sms):
+        smsobjlist = []
+
+        query = self.session.query(QzcSmsText)
+        sms_all = query.all()
+
+        for line in sms.splitlines():
+            l = line.split(',', 4)
+            com = l[0]
+            rtime = datetime.strptime(l[1], '%Y-%m-%d %H:%M:%S')
+            sfrom = l[2]
+            sto = l[3]
+            text = l[4]
+            smsobj = QzcSmsText(name, rtime, sfrom, sto, text, com)
+            exists = False
+            for _sms in sms_all:
+                if _sms == smsobj:
+                    exists = True
+                    break
+            if not exists:
+                smsobjlist.append(smsobj)
+
+        try:
+            self.session.add_all(smsobjlist)
+            self.session.commit()
+        except Exception as e:
+            _logger.error(e)
+            self.session.rollback()
+            return False
+
+        else:
+            return True
+
     
     def close(self):
         self.session.close()

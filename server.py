@@ -15,8 +15,9 @@
 #from bottle import route, run
 import time
 import json
-import hashlib
 import base64
+import hashlib
+import zipfile
 import bottle
 import cork
 import rsa
@@ -124,6 +125,9 @@ def qqzc_init(name):
     if not _dbman.user_exist(name):
         return 'not exist.'
 
+    ip = bottle.request.environ.get('REMOTE_ADDR')
+    _dbman.user_login(name, ip)
+
     # 2. phone number format: n
     #    >>> import base64
     #    >>> numbers = [number1, number2, ...]
@@ -207,8 +211,45 @@ def qqzc_smsvc(name):
     else:
         return 'add failed'
     
-@bottle.route('/1/<name>/3')
+@bottle.route('/1/<name>/3', method='post')
 def qqzc_report(name):
+    # client will post sms to this server
+    #print(dir(bottle.request.files))
+    #print(type(bottle.request.files))
+    #print("bottle.request.files:")
+    #for k,v in bottle.request.files.items():
+    #    print('{}={}'.format(k,v))
+    #print("bottle.request.forms:")
+    #for k,v in bottle.request.forms.items():
+    #    print('{}={}'.format(k,v))
+    #print(type(bottle.request.body))
+    #print(bottle.request.body)
+    #raw = bottle.request.body.read()
+
+    upload = bottle.request.files.get('filename')
+    # name, ext = os.path.splitext(upload.filename)
+
+    _logger.info('filename: %s', upload.filename)
+
+    if upload.filename.endswith('.zip'):
+        _logger.info('client send a zip file')
+        tmpzip = 'tmp.zip'
+        with open(tmpzip, 'wb') as f:
+            raw = upload.file.read()
+            f.write(raw)
+        zf = zipfile.ZipFile(tmpzip)
+        raw = zf.read(zf.namelist()[0])
+    else:
+        raw = upload.file.read()
+    #_logger.info('recv file %d bytes:\n%s', len(raw), raw.decode('gbk'))
+    #_logger.info('recv file %d bytes', len(raw))
+
+    _dbman.add_smstext(name, raw.decode('gbk'))
+    return 'ok'
+
+
+
+def qqzc_report_old(name):
     """report total successful registrations TODAY"""
     # 1. check username
     if not _dbman.user_exist(name):
