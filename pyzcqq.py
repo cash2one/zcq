@@ -16,6 +16,7 @@ import urllib.request
 import http.cookiejar
 import rsa # third-party module
 import encryption
+import ruokuai
 
 GENDER_MALE = 1
 GENDER_FEMALE = 2
@@ -113,11 +114,13 @@ class QQReg(object):
     def __init__(self, *args, **kwargs):
         """Iintialize a registration object.
         """
-        self.if_rand = kwargs.get('random', False)
-        self.captcha_from = kwargs.get('captcha', 'console')
-        self.phone_from = kwargs.get('phone', 'console')
-        self.captcha_path = kwargs.get('captcha_path', 'captcha')
-        self.logfile = kwargs.get('log_file', 'QQReg.log')
+        self.if_rand        = kwargs.get('random', False)
+        self.captcha_from   = kwargs.get('captcha', 'console')
+        self.phone_from     = kwargs.get('phone', 'console')
+        self.captcha_path   = kwargs.get('captcha_path', 'captcha')
+        self.logfile        = kwargs.get('log_file', 'QQReg.log')
+        self.rk_user        = kwargs.get('rk_user', None)
+        self.rk_pass        = kwargs.get('rk_pass', None)
         
         # cookie
         self.cookies = http.cookiejar.CookieJar()
@@ -248,8 +251,27 @@ class QQReg(object):
             self.verifycode = input("Please input what you see in \"{}\":".format(self.captha_name))
             
         elif self.captcha_from == 'ruokuai':
-            # TODO: use ruokuai
-            pass
+            # use ruokuai
+            if not self.rk_user:
+                raise Exception('Ruokuai user is empty!')
+            if not self.rk_pass:
+                raise Exception('Ruokuai password is empty!')
+            url = "http://api.ruokuai.com/create.json"
+            paramKeys = ['username', 'password', 'typeid', 'timeout', 'softid', 'softkey']
+            paramDict = {
+                    'username': self.rk_user, 
+                    'password': self.rk_pass,
+                    'typeid': '3040',
+                    'timeout': '100',
+                    'softid': '57838',
+                    'softkey': 'b61afeabc6d648c794354ceba073737c'
+                    }
+            with open(self.capcha_name, 'rb') as f:
+                imagebytes = f.read()
+            rk = ruokuai.APIClient()
+            con = rk.http_upload_image(url, paramKeys, paramDict, imagebytes)
+            obj = json.loads(con)
+            self.verifycode = obj["Result"]
             
         else:
             raise UnknownCaptchaFromException("Unknown captcha source")

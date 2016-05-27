@@ -51,6 +51,7 @@
     </div>
     <div>
     <a href="/admin/phones">显示电话号码 </a> <br />
+    <a href="/admin/sms">查看短信记录</a> <br />
     <a href="/logout">退出登录 </a>
     </div>
     <div>
@@ -70,7 +71,7 @@
     <form action="/adddev" method="POST" name="adddev_form" id="adddev_form">
     <table>
     <tr><td>机器（设备）名称</td><td><input type="text" name="dname" id="dname" size="20" maxlength="20" /></td></tr>
-    <tr><td>密码</td><td><input type="text" name="dname" id="dpass" size="20" maxlength="64" /></td></tr>
+    <tr><td>密码</td><td><input type="text" name="dpass" id="dpass" size="20" maxlength="64" /></td></tr>
     <tr><td>&nbsp;</td><td><input type="button" value="增加机器" id="adddev" name="adddev" onclick="javascript:addDev();" /></td></tr>
     </table>
     </form>

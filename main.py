@@ -24,15 +24,15 @@ class QManagerBackend(object):
         
     def start(self):
         cm = self.cm
-        if cm.phone_from == 'console':
-            # from console
-            qr = pyzcqq.QQReg(random=int(cm.random), phone='console')
-            qr.do_reg()
-        elif cm.phone_from == 'remote':
+        #if cm.phone_from == 'console':
+        #    # from console
+        #    qr = pyzcqq.QQReg(random=int(cm.random), phone='console')
+        #    qr.do_reg()
+        #elif cm.phone_from == 'remote':
             # from remote, will start http server
-            server.run_server(cm.server_host, int(cm.server_port), self.dbman)
-        else:
-            raise UnknownPhoneFromError('unknown phone from: {}'.format(cm.phone_from))
+        server.run_server(cm.server_host, int(cm.server_port), self.dbman)
+        #else:
+        #    raise UnknownPhoneFromError('unknown phone from: {}'.format(cm.phone_from))
             
     # def check_login(self, name, password):
         # cm = self.cm
@@ -47,7 +47,7 @@ class QManagerBackend(object):
     # return qmb.check_login(name, password)
     
 if __name__ == '__main__':
-    qmb = QManagerBackend('config.ini')
+    qmb = QManagerBackend('server.ini')
     qmb.start()
 
     

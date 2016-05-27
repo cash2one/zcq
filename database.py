@@ -90,15 +90,15 @@ class QzcActions(BaseModel):
 
 class QzcDevs(BaseModel):
     __tablename__ = 'devices'
-    id_ = Column('id', Integer, primary_key=True)
     ip  = Column('ip', VARCHAR(20))
-    dname = Column('dname', VARCHAR(20))
+    dname = Column('dname', VARCHAR(20), primary_key=True)
     dpass = Column('password', VARCHAR(64))
     duuid = Column('duuid', VARCHAR(128))
     status = Column('status', Integer)
     
-    def __init__(self, name):
+    def __init__(self, name, password):
         self.dname = name
+        self.dpass = password
         self.ip = ""
         self.duuid = ""
         self.status = 0
@@ -345,10 +345,17 @@ class QzcDatabaseManager(object):
         ds = query.all()
         return ds
 
-    def add_dev(self, dname):
+   
+    def query_dev(self, dev):
+        query = self.session.query(QzcDevs)
+        d = query.filter_by(dname=dev).first()
+        return d
+
+
+    def add_dev(self, dname, dpass):
         # add a new device 
         try:
-            u = QzcDevs(dname)
+            u = QzcDevs(dname, dpass)
             self.session.add(u)
             self.session.commit()
         except Exception as e:
@@ -357,6 +364,19 @@ class QzcDatabaseManager(object):
             return False
         else:
             return True
+
+
+    def update_dev(self, dev, ip):
+        d = self.query_dev(dev)
+        if d is None:
+            return
+        d.ip = ip
+        try:
+            # self.session.add(d)
+            self.session.commit()
+        except Exception as e:
+            _logger.error(e)
+            self.session.rollback()
 
     def update_phone_status(self, phones, status, devname='', devip='', devsession=''):
         # 1. update phone status
@@ -392,6 +412,26 @@ class QzcDatabaseManager(object):
             pass
 
         return [smsreq.id_ for smsreq in smsreq_list]
+
+
+    def get_available_phones(self):
+        query = self.session.query(QzcUserPhones)
+        phones = query.filter_by(status=0).all()
+        if phones is None:
+            return None
+        if len(phones) > 16:
+            phones = phones[:16]
+        for p in phones:
+            p.status = 1
+        try:
+            self.session.commit()
+        except Exception as e:
+            _logger.error(e)
+            self.session.rollback()
+        else:
+            pass
+        return phones
+
 
     def query_smsvc_dev(self, devname):
         # query smsvc table where devname=devname and status=1
@@ -493,6 +533,24 @@ class QzcDatabaseManager(object):
 
         else:
             return True
+
+
+    def query_sms(self, name=None):
+        query = self.session.query(QzcSmsText)
+        if name is None:
+            return query.all()
+        sms = query.filter_by(uname=name).all()
+        return sms
+
+
+    def dev_exist(self, dev):
+        query = self.session.query(QzcDevs)
+        d = query.filter_by(dname=dev).first()
+        if d is None:
+            return False
+        return True
+
+
 
     
     def close(self):

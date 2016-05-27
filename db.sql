@@ -53,13 +53,12 @@ CREATE TABLE actions (
 
 /* devices */
 CREATE TABLE devices (
-    id INT UNSIGNED NOT NULL auto_increment,
     dname VARCHAR(20) NOT NULL,
-    dpass VARCHAR(64),
+    password VARCHAR(64),
     ip VARCHAR(20),
     duuid VARCHAR(128),
     status INT,
-    PRIMARY KEY(id)
+    PRIMARY KEY(dname)
 );
 
 CREATE TABLE smsvc (

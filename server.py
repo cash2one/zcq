@@ -44,6 +44,11 @@ _dbman = None
 @bottle.route('/hello')
 def hello():
     return 'hello, world'
+
+
+@bottle.route('/')
+def index():
+    bottle.redirect('/admin')
     
 @bottle.get('/login') # or @route('/login')
 def login():
@@ -100,22 +105,31 @@ def adduser():
     else:
         return bottle.template('tpl/adduser_failed.tpl', name=uname, password=upass)
 
+
 @bottle.route('/adddev', method="post")
-def adduser():
+def adddev():
     aaa.require(role='admin', fail_redirect='/login')
     dname = bottle.request.forms.get('dname')
     dpass = bottle.request.forms.get('dpass')
-    ok = _dbman.add_dev(dname)
+    ok = _dbman.add_dev(dname, dpass)
     if ok:
         bottle.redirect('/admin')
     else:
         return bottle.template('tpl/adddev_failed.tpl', name=dname)
+
 
 @bottle.route('/admin/phones')
 def admin_phones():
     aaa.require(role='admin', fail_redirect='/login')
     phones = _dbman.query_phones()
     return bottle.template('tpl/admin_phones.tpl', user='admin', phones=phones)
+
+
+@bottle.route('/admin/sms')
+def admin_sms():
+    aaa.require(role='admin', fail_redirect='/login')
+    sms = _dbman.query_sms()
+    return bottle.template('tpl/admin_sms.tpl', user='admin', sms=sms)
 
     
 @bottle.route('/1/<name>/1', method='post')
@@ -264,6 +278,14 @@ def qqzc_report_old(name):
 _dev_session = {}
 _dev_challenge = {}
 
+
+def check_devpass(devpass, cookie, cpass):
+    m = hashlib.md5('{}-{}'.format(cookie, devpass).encode())
+    h = base64.b64encode(m.digest()).decode()
+    if h == cpass:
+        return True
+    return False
+
 @bottle.route('/1/<dev>/4', method='get')
 def qqzc_dev_login(dev):
     '''for devices to login to get a session id'''
@@ -272,6 +294,7 @@ def qqzc_dev_login(dev):
         return 'not exist.'
     # check cookie
     cookie = bottle.request.get_cookie('n')
+    cpass  = bottle.request.query.get('p')
     ip = bottle.request.environ.get('REMOTE_ADDR')
     if (cookie is None 
             or len(cookie) == 0 
@@ -283,12 +306,18 @@ def qqzc_dev_login(dev):
         bottle.response.set_cookie('n', c)
         _dev_challenge[ip] = c
         return 'need authorization'
-    elif not _dbman.check_devpass(dev, cookie):
+
+    d = _dbman.query_dev(dev)
+    if d is None:
+        return 'authorized failure'
+    if not check_devpass(d.dpass, cookie, cpass):
         return 'authorized failure'
     else:
+        # update device info
+        _dbman.update_dev(dev, ip)
         # add a session
         c = '{}-{:.0f}-{}'.format(dev, time.time(), ip)
-        s = hashlib.md5(c.encode().hexdigest())
+        s = hashlib.md5(c.encode()).hexdigest()
         _dev_session[ip] = s
         bottle.response.set_cookie('s', s)
         return 'ok'
@@ -320,10 +349,14 @@ def qqzc_dev_getphones(dev):
     # 2. return available phone numbers
     phones = _dbman.get_available_phones()
     if phones is None or len(phones) == 0:
-        return 'ok'
+        return '[]'
+
+    phone_list = []
+    for p in phones:
+        phone_list.append({'number': p.phone, 'user': p.uname})
 
     # TODO return phones
-    return
+    return json.dumps(phone_list)
 
 @bottle.route('/1/<dev>/6')
 def qqzc_dev_requestsmsvc(dev):
