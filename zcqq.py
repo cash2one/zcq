@@ -13,9 +13,9 @@ parser.add_argument('-c', '--captcha', type=str,
                    help='where to get captcha, reasonable values are: console, ruokuai')
 parser.add_argument('-p', '--phone', type=str,
                    help='where to get phone numbers, reasonable values are: console, remote')
-parser.add_argument('-ru', '--ruokuai-user', dest='rk_user' type=str,
+parser.add_argument('-ru', '--ruokuai-user', dest='rk_user', type=str,
                    help='if use `-c ruokuai`, this option specifies ruokuai username')
-parser.add_argument('-rp', '--ruokuai-password', dest='rk_pass' type=str,
+parser.add_argument('-rp', '--ruokuai-password', dest='rk_pass', type=str,
                    help='if use `-c ruokuai`, this option specifies ruokuai username')
                    
 

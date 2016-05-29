@@ -8,6 +8,7 @@ import base64
 import hashlib
 import logging
 import subprocess
+import configparser
 import urllib.parse
 import urllib.request
 import http.cookiejar
@@ -20,27 +21,82 @@ logging.basicConfig(format=FORMAT, level=logging.DEBUG)
 class LoginFailException(Exception): pass
 class NoPhoneException(Exception): pass
 
+class ClientConfig(object):
+    '''Client configuration
+    '''
+    def __init__(self, configfile):
+        self.config = configparser.ConfigParser()
+        self.config.read(configfile)
+
+
+    @property
+    def region(self):
+        return self.config['Registration']['region']
+
+
+    @property
+    def random(self):
+        return self.config['Registration']['random']
+
+    @property
+    def phone(self):
+        return self.config['Registration']['phone']
+
+
+    @property
+    def ruokuai(self):
+        return self.config['ruokuai']['enable']
+
+    
+    @property
+    def rk_user(self):
+        return self.config['ruokuai']['rk_user']
+
+
+    @property
+    def rk_pass(self):
+        return self.config['ruokuai']['rk_pass']
+
+
+    @property
+    def server(self):
+        return '{}:{}'.format(self.config['server']['host'], 
+                self.config['server']['port'])
+
+    @property
+    def sv_user(self):
+        return self.config['server']['user']
+
+
+    @property
+    def sv_pass(self):
+        return self.config['server']['pass']
+
+
 class RegClient(object):
     '''Registeration client
     '''
     
-    def __init__(self, name, password):
-        self.name = name
-        self.password = password
-        self.cookies = http.cookiejar.CookieJar()
-        self.session = ''
+    def __init__(self, , configfile):
+        self.config     = ClientConfig(configfile)
+        self.server     = self.config.server
+        self.name       = self.config.sv_name
+        self.password   = self.config.sv_pass
+        self.cookies    = http.cookiejar.CookieJar()
+        self.session    = ''
         
-        self.login_count = 0
-        self.login_auth = ''
-        self.phone_cache_filename = 'avaiphones.txt'
+        self._login_count = 0
+        self._login_auth  = ''
+        self._phone_cache = 'avaiphones.txt'
         
     def login(self):
-        self.login_count += 1
-        url = '{}/1/{}/4?p={}'.format(SERVER, self.name, urllib.parse.quote(self.login_auth))
-        logging.info('request pass: %s', self.login_auth)
+        self._login_count += 1
+        url = '{}/1/{}/4?p={}'.format(self.server, self.name, 
+                urllib.parse.quote(self._login_auth))
+        logging.info('request pass: %s', self._login_auth)
         
-        if self.login_count > 2:
-            self.login_count = 0
+        if self._login_count > 2:
+            self._login_count = 0
             raise LoginFailException('Login has been tried too many times')
         
         cookieprocessor = urllib.request.HTTPCookieProcessor(self.cookies)
@@ -73,7 +129,7 @@ class RegClient(object):
                     break
             b = '{}-{}'.format(n, self.password).encode()
             m = hashlib.md5(b)
-            self.login_auth = base64.b64encode(m.digest()).decode()
+            self._login_auth = base64.b64encode(m.digest()).decode()
             return self.login()
         elif con == 'authorized failure':
             # fail
@@ -91,7 +147,7 @@ class RegClient(object):
         
         res = self.opener.open(url)
         con = res.read()
-        with open(self.phone_cache_filename , 'wb') as f:
+        with open(self._phone_cache, 'wb') as f:
             f.write(con)
         con = con.decode()
         logging.info('response: %s', con)
@@ -103,9 +159,9 @@ class RegClient(object):
     def start_reg(self):
 
         # read from cache
-        with open(self.phone_cache_filename, 'rb') as f:
+        with open(self._phone_cache, 'rb') as f:
             con = f.read()
-        self.available_phones.extend(json.loads(con.decode()))
+            self.available_phones.extend(json.load(con.decode()))
 
         if len(self.available_phones) == 0:
             raise  NoPhoneException('no avaiable phone numbers')
@@ -115,7 +171,10 @@ class RegClient(object):
         else:
             py = 'python3'
             
-        args = [py, 'zcqq.py', '-r', 1, '-c', 'ruokuai', '-p', 'remote']
+        args = [py, 'zcqq.py', '-r', self.config.random, '-c', 'ruokuai', '-p', 'remote']
+
+        if self.config.ruokuai:
+            args.extend(['-ru', self.config.rk_user, '-rp', self.config.rk_pass])
             
         sb = subprocess.Popen(args)
         
@@ -125,7 +184,7 @@ class RegClient(object):
     
 
 if __name__ == '__main__':
-    rc = RegClient('m1', 'm1')
+    rc = RegClient('client.ini')
     try:
         ok = rc.login()
     except Exception as e:

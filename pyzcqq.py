@@ -234,10 +234,10 @@ class QQReg(object):
             
             
             now = time.strftime("%Y%m%d-%H%M%S")
-            self.captha_name = os.path.join("captcha", "{}.jpg".format(now))
-            self._logger.info("Save captcha to %s", self.captha_name)
+            self.captcha_name = os.path.join("captcha", "{}.jpg".format(now))
+            self._logger.info("Save captcha to %s", self.captcha_name)
             
-            with open(self.captha_name, "wb") as f:
+            with open(self.captcha_name, "wb") as f:
                 f.write(res.read())
                 
             return True
@@ -266,7 +266,7 @@ class QQReg(object):
                     'softid': '57838',
                     'softkey': 'b61afeabc6d648c794354ceba073737c'
                     }
-            with open(self.capcha_name, 'rb') as f:
+            with open(self.captcha_name, 'rb') as f:
                 imagebytes = f.read()
             rk = ruokuai.APIClient()
             con = rk.http_upload_image(url, paramKeys, paramDict, imagebytes)
@@ -358,6 +358,7 @@ class QQReg(object):
         # send smsvc
         url = self.sendsms_url
         r = random.random()
+        self._logger.info('use phone number %s to receive sms verify code.', self.phone)
         query = 'telphone={0}&elevel=3&regType=11&r={1}'.format(self.phone, r)
         headers = {
                 "User-Agent": self.user_agent,
