@@ -51,6 +51,30 @@ class APIClient(object):
         return con.decode()
 
 
+    def http_report_error(self, url, paramDict):
+        timestr = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        boundary = '------------' + hashlib.md5(timestr.encode()).hexdigest().lower()
+        boundarystr = '\r\n--%s\r\n'%(boundary)
+        
+        bs = b''
+        for key in paramKeys:
+            bs = bs + boundarystr.encode('ascii')
+            param = "Content-Disposition: form-data; name=\"%s\"\r\n\r\n%s"%(key, paramDict[key])
+            #print param
+            bs = bs + param.encode('utf8')
+
+        #import requests
+        headers = {'Content-Type':'multipart/form-data; boundary=%s'%boundary,
+                   'Connection':'Keep-Alive',
+                   'Expect':'100-continue',
+                   }
+        #response = requests.post(url, params='', data=bs, headers=headers)
+        req = urllib.request.Request(url, data=bs, headers=headers)
+        res = urllib.request.urlopen(req)
+        con = res.read()
+        return con.decode()
+
+
     
 
 

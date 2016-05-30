@@ -3,6 +3,7 @@
 
 import os
 import sys
+import time
 import json
 import base64
 import hashlib
@@ -13,13 +14,12 @@ import urllib.parse
 import urllib.request
 import http.cookiejar
 
-SERVER = 'http://192.168.4.194:8088'
-
 FORMAT = '[%(asctime)-15s] %(levelname)s %(message)s'
 logging.basicConfig(format=FORMAT, level=logging.DEBUG)
 
 class LoginFailException(Exception): pass
 class NoPhoneException(Exception): pass
+class UnImplementationError(Exception): pass
 
 class ClientConfig(object):
     '''Client configuration
@@ -77,10 +77,10 @@ class RegClient(object):
     '''Registeration client
     '''
     
-    def __init__(self, , configfile):
+    def __init__(self, configfile):
         self.config     = ClientConfig(configfile)
         self.server     = self.config.server
-        self.name       = self.config.sv_name
+        self.name       = self.config.sv_user
         self.password   = self.config.sv_pass
         self.cookies    = http.cookiejar.CookieJar()
         self.session    = ''
@@ -91,7 +91,7 @@ class RegClient(object):
         
     def login(self):
         self._login_count += 1
-        url = '{}/1/{}/4?p={}'.format(self.server, self.name, 
+        url = 'http://{}/1/{}/4?p={}'.format(self.server, self.name, 
                 urllib.parse.quote(self._login_auth))
         logging.info('request pass: %s', self._login_auth)
         
@@ -143,17 +143,34 @@ class RegClient(object):
         
      
     def get_phones(self):
-        url = '{}/1/{}/5'.format(SERVER, self.name)
+        url = 'http://{}/1/{}/5'.format(self.server, self.name)
         
         res = self.opener.open(url)
         con = res.read()
-        with open(self._phone_cache, 'wb') as f:
-            f.write(con)
+        logging.info('con=%s', con)
+        if con != b'[]':
+            with open(self._phone_cache, 'wb') as f:
+                f.write(con)
         con = con.decode()
         logging.info('response: %s', con)
         self.available_phones = json.loads(con)
         logging.info('phones: %s',  self.available_phones)
         return True
+
+
+    def get_smsvc(self, phone, when):
+        url = 'http://{}/1/{}/7?p={}&w={}'.format(self.server, self.name, phone, when)
+
+        cookieprocessor = urllib.request.HTTPCookieProcessor(self.cookies)
+        self.opener = urllib.request.build_opener(cookieprocessor)
+        req = urllib.request.Request(url)
+        res = self.opener.open(req)
+
+        con = res.read()
+        con = con.decode()
+        logging.info('get sms verify code: %s', con)
+        return con
+
         
     
     def start_reg(self):
@@ -161,7 +178,7 @@ class RegClient(object):
         # read from cache
         with open(self._phone_cache, 'rb') as f:
             con = f.read()
-            self.available_phones.extend(json.load(con.decode()))
+            self.available_phones.extend(json.loads(con.decode()))
 
         if len(self.available_phones) == 0:
             raise  NoPhoneException('no avaiable phone numbers')
@@ -171,7 +188,14 @@ class RegClient(object):
         else:
             py = 'python3'
             
-        args = [py, 'zcqq.py', '-r', self.config.random, '-c', 'ruokuai', '-p', 'remote']
+        args = [py, 'zcqq.py', '-r', self.config.random, '-s', self.server, '-c', 'ruokuai']
+
+        if self.config.phone == 'local':
+            phones = [p['number'] for p in self.available_phones]
+            args.extend(['-p', 'local', '-pl', ','.join(phones)])
+        elif self.config.phone == 'remote':
+            # TODO design remote interface
+            raise UnImplementationError("phone from remote not implemented.")
 
         if self.config.ruokuai:
             args.extend(['-ru', self.config.rk_user, '-rp', self.config.rk_pass])
@@ -193,6 +217,7 @@ if __name__ == '__main__':
     else:
         logging.info('login ok')
         rc.get_phones()
-    self.start_reg()
+    #rc.start_reg()
+    rc.get_smsvc('18157762774', '20160530-161000')
         
 

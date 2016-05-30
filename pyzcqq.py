@@ -26,6 +26,41 @@ GENDER_FEMALE = 2
                 # datefmt='%Y-%m-%d %H:%M:%S')
 
 class UnknownCaptchaFromException(Exception): pass
+class PhonePoolEmptyException(Exception): pass
+
+class PhonePool(object):
+    '''Phone number pool'''
+    def __init__(self, phone_list):
+        self.phone_list = phone_list
+        self.current_index = 0
+        
+
+
+    def first(self):
+        if self.empty():
+            raise PhonePoolEmptyException('phone pool is empty')
+        self.curent_index = 0
+        return self.phone_list[self.current_index]
+
+
+    def next(self):
+        if self.empty():
+            raise PhonePoolEmptyException('phone pool is empty')
+
+        try:
+            phone = self.phone_list[self.current_index]
+            self.current_index += 1
+        except IndexError:
+            self.current_index = -1
+            phone = None
+    
+        return phone
+
+
+    def empty(self):
+        return self.phone_list is None or len(self.phone_list) == 0
+
+
 
 class Cookie(object):
     """self defined cookie class"""
@@ -117,10 +152,13 @@ class QQReg(object):
         self.if_rand        = kwargs.get('random', False)
         self.captcha_from   = kwargs.get('captcha', 'console')
         self.phone_from     = kwargs.get('phone', 'console')
+        self.phone_list     = kwargs.get('phone_list', None)
+        self.phone_pool     = PhonePool(self.phone_list)
         self.captcha_path   = kwargs.get('captcha_path', 'captcha')
         self.logfile        = kwargs.get('log_file', 'QQReg.log')
         self.rk_user        = kwargs.get('rk_user', None)
         self.rk_pass        = kwargs.get('rk_pass', None)
+        self.server         = kwargs.get('server', None)
         
         # cookie
         self.cookies = http.cookiejar.CookieJar()
@@ -145,6 +183,8 @@ class QQReg(object):
         self.elevel = 1
         self.phone = ''
         self.smsvc = ''
+        self.need_reg = True
+        self.goods = 0
         
         # directory to save captcha
         
@@ -271,7 +311,10 @@ class QQReg(object):
             rk = ruokuai.APIClient()
             con = rk.http_upload_image(url, paramKeys, paramDict, imagebytes)
             obj = json.loads(con)
+            self._logger.info('ruokuai returns: %s', con)
+            self._logger.info('ruokuai returns verify code: %s', obj['Result'])
             self.verifycode = obj["Result"]
+            self._rk_tid = obj['Id']
             
         else:
             raise UnknownCaptchaFromException("Unknown captcha source")
@@ -338,21 +381,12 @@ class QQReg(object):
             pass
 
     def input_phone(self):
-        if self.phone_from == 'console':
-            self.phone = input('Please input phone number: ')
-        elif self.phone_from == 'carddrive':
-            # TODO Kucard implementation
-            pass
-        elif self.phone_from == 'remote':
-            # TODO c/s mode phone number
-            pass
-        else:
-            if self._check_phone(self.phone_from):
-                self.phone = self.phone_from
-            else:
-                self._logger.error('invalid phone: %s', self.phone_from)
-                return 
-
+        if not self.phone:
+            self.phone = self.next_phone()
+        if not self.phone:
+            self._logger.info('phone number exhausted')
+            self.need_reg = False
+            return
         self.elevel = 3
 
         # send smsvc
@@ -365,7 +399,7 @@ class QQReg(object):
                 "Referer": self.referer_url
                 }
         try:
-            self._logger.info('requst %s', url)
+            self._logger.info('requst %s?%s', url, query)
             cookieprocessor = urllib.request.HTTPCookieProcessor(self.cookies)
             opener = urllib.request.build_opener(cookieprocessor)
             req = urllib.request.Request(url, query.encode(), headers)
@@ -381,6 +415,7 @@ class QQReg(object):
             ec = o['ec']
             if ec == 0:
                 # send sms ok
+                self._logger.info('phone number ok, receive sms verify code')
                 if self.phone_from == 'console' or self.phone == self.phone_from:
                     self.smsvc = input('Please input sms verify code: ')
                 elif self.phone_from == 'carddrive':
@@ -389,14 +424,53 @@ class QQReg(object):
                 elif self.phone_from == 'remote':
                     # TODO use c/s mode to receive sms verify code
                     pass
+                elif self.phone_from == 'local':
+                    self._logger.info('need get sms verify code from %s', self.phone)
             elif ec == 14:
                 # already to limited number
                 self._logger.info('this phone %s received up to limited sms.', self.phone)
+                self.phone = '' # self.next_phone()
+                #if not self.phone:
+                #    self.need_reg = False
+                #else:
+                #    self._logger.info('change to use phone %s', self.phone)
+            elif ec == 16:
+                # TODO sms check error: what is this?
+                pass
             elif ec == 4 or ec == 31:
                 # phone format invalid
                 self._logger.info('invalid phone: %s', self.phone)
             else:
                 self._looger.info('error code: %d, will retry later', ec)
+
+    
+    def next_phone(self):
+        phone = None
+        if self.phone_from == 'console':
+            phone = input('Please input phone number: ')
+            phone = phone.strip()
+            if not phone:
+                return None
+        elif self.phone_from == 'carddrive':
+            # TODO Kucard implementation
+            pass
+        elif self.phone_from == 'remote':
+            # TODO c/s mode phone number
+            pass
+        elif self.phone_from == 'local':
+            # TODO get phone from local
+            if self.phone_pool is None or self.phone_pool.empty():
+                self._logger.error('phone from local, but pool is empty!')
+                return 
+            phone = self.phone_pool.next()
+
+        else:
+            if self._check_phone(self.phone_from):
+                phone = self.phone_from
+            else:
+                self._logger.error('invalid phone: %s', self.phone_from)
+                return 
+        return phone
 
     def _check_phone(self, maybephone):
         maybephone = maybephone.strip()
@@ -404,11 +478,19 @@ class QQReg(object):
                 and len(maybephone) == 11 
                 and maybephone.isnumeric())
 
+
     def do_reg(self):
         # TODO do actual regiter action
-        self.init_reg()
-        self.send_monikey_common()
-        self.input_captcha()
+        while self.need_reg:
+            self._reg()
+
+
+    def _reg(self):
+
+        if not self.phone and not self.smsvc:
+            self.init_reg()
+            self.send_monikey_common()
+            self.input_captcha()
 
         query = self._format_query()
 
@@ -446,25 +528,46 @@ class QQReg(object):
                 # OK !
                 self._logger.info("got qq number: %s", o["uin"])
                 # TODO save it to database
+                self.goods += 1
             elif ec == 2:
                 # captcha error
                 self._logger.info('capthcha error')
+                if self.captcha_from == 'ruokuai':
+                    # report error to ruokuai
+                    paramDict = {
+                            'username': self.rk_user, 
+                            'password': self.rk_pass,
+                            'softid': '57838',
+                            'softkey': 'b61afeabc6d648c794354ceba073737c',
+                            'id': self._rk_tid,
+                            }
+                    url = 'http://api.ruokuai.com/reporterror.json'
+                    rk = ruokuai.APIClient()
+                    con = rk.http_report_error(url, paramDict)
+                    obj = json.loads(con)
+                    self._logger.info('ruokuai returns: %s', con)
+                    self._logger.info('ruokuai returns verify code: %s', obj['Result'])
+                    self.verifycode = obj["Result"]
+
                 self.input_captcha()
             elif ec == 4:
                 # parameter error
                 self._logger.info('paramter error, please check!')
+                self.need_reg = False
             elif ec == 20:
                 # need phone number to receive sms verify code
                 self._logger.info('need send sms')
                 self.input_phone()
+                #if self.phone is None:
+                #    self.need_reg = False
             elif ec == 21:
                 # ERROR: blocked !!!
                 self._logger.error('this ip is blocked! retry in 24 hours or change ip')
-                return
+                self.need_reg = False
             elif ec == 26:
                 # need send 1 to 10690700511 
                 self._logger.info('need use a phone to send 1 to 10690700511')
-                return
+                self.need_reg = False
             else:
                 # unknown error code
                 self._logger.info('unkown error code: %d', ec)

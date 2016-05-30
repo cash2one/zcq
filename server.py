@@ -21,6 +21,7 @@ import zipfile
 import bottle
 import cork
 import rsa
+from datetime import datetime
 from beaker.middleware import SessionMiddleware
 import zclog
 
@@ -383,16 +384,57 @@ def qqzc_dev_getsmsvc(dev):
     # 1. check session
     if 0 != dev_check_session(dev, bottle.request):
         return 'failed'
-    smsvc = _dbman.query_smsvc_dev(dev)
 
-    l = []
+    phone = bottle.request.query.get('p')
+    when  = bottle.request.query.get('w')
 
-    for v in smsvc:
-        l.append({'phone':v.phone, 'code':v.code})
+    _logger.info('query phone %s after %s', phone, when)
+    print('query phone {} after {}'.format(phone, when))
 
-    s = json.dumps(smsvc)
-    _logger.info('smsvc response: %s', s)
-    return s
+    when  = datetime.strptime(when, '%Y%m%d-%H%M%S')
+
+    count = 0
+    smstxt = ''
+
+    while True:
+        count += 1
+        if count > 5:
+            return 'timeout'
+        smsvc = _dbman.query_smsvc(dev, phone, when)
+
+        if smsvc is None:
+            time.sleep(2)
+            continue
+        
+        for s in smsvc:
+            t = s.text
+            _logger.info('message:', t)
+            if (t.find('[tencent]') > -1 
+                    or t.find('【腾讯科技】') > -1
+                    or t.find('[腾讯科技]') > -1):
+                smstxt = t
+                break
+
+        if smstxt:
+            break
+
+
+    #l = []
+
+    #for v in smsvc:
+    #    l.append({'phone':v.phone, 'code':v.code})
+
+    #s = json.dumps(smsvc)
+    codes = []
+    for c in smstxt:
+        a = ord(c)
+        if a >= 0x30 and a <= 0x39:
+            codes.append(c)
+        else:
+            break
+    vc = ''.join(codes)
+    _logger.info('smsvc response: %s', vc)
+    return vc
 
 @bottle.route('/1/<dev>/8', method='post')
 def qqzc_dev_getuin(dev):

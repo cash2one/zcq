@@ -8,7 +8,7 @@ import zclog
 from datetime import datetime
 import sqlalchemy
 import sqlalchemy.ext.declarative 
-from sqlalchemy import Column, ForeignKey, MetaData, Table
+from sqlalchemy import Column, ForeignKey, MetaData, Table, and_
 from sqlalchemy.types import VARCHAR, Integer, DATETIME
 from sqlalchemy.orm import mapper, sessionmaker
 
@@ -433,7 +433,14 @@ class QzcDatabaseManager(object):
         return phones
 
 
-    def query_smsvc_dev(self, devname):
+    def query_smsvc(self, devname, phone, when):
+        # query smstext table where phone=phone and date>when
+        query = self.session.query(QzcSmsText)
+        sms = query.filter(and_(QzcSmsText.sto==phone, QzcSmsText.rtime>=when)).all()
+        return sms
+
+
+    def _query_smsvc_dev(self, devname, phone, when):
         # query smsvc table where devname=devname and status=1
         # status code:
         #   0: waiting to get smsvc code

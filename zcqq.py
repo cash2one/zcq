@@ -13,10 +13,14 @@ parser.add_argument('-c', '--captcha', type=str,
                    help='where to get captcha, reasonable values are: console, ruokuai')
 parser.add_argument('-p', '--phone', type=str,
                    help='where to get phone numbers, reasonable values are: console, remote')
+parser.add_argument('-pl', '--phone-list', type=str, dest='phone_list',
+        help='if `phone` is set to `local`, place the phone list here, each by comma seperated')
 parser.add_argument('-ru', '--ruokuai-user', dest='rk_user', type=str,
                    help='if use `-c ruokuai`, this option specifies ruokuai username')
 parser.add_argument('-rp', '--ruokuai-password', dest='rk_pass', type=str,
                    help='if use `-c ruokuai`, this option specifies ruokuai username')
+parser.add_argument('-s', '--server', type=str,
+                    help='Server ip and port')
                    
 
 # parser.add_argument('--sum', dest='accumulate', action='store_const',
@@ -26,12 +30,16 @@ parser.add_argument('-rp', '--ruokuai-password', dest='rk_pass', type=str,
 
 args = parser.parse_args()
 
+phone_list = args.phone_list.split(',') if args.phone_list is not None else None
+
 qqreg = QQReg(
             random=args.random, 
             captcha=args.captcha, 
             phone=args.phone, 
+            phone_list=phone_list,
             rk_user=args.rk_user, 
-            rk_pass=args.rk_pass
+            rk_pass=args.rk_pass,
+            server=args.server
         )
 qqreg.do_reg()
 
