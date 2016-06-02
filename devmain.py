@@ -73,6 +73,21 @@ class ClientConfig(object):
         return self.config['server']['pass']
 
 
+
+clients = []
+
+def find_regdev_by_session(session):
+    for c in clients:
+        if c.session == session:
+            return c
+    return 
+
+
+#class ClientType(type):
+#    def __new__(cls, name, bases, attrs):
+#        return super(ClientType, cls).__new__(cls, name, bases, attrs)
+
+
 class RegClient(object):
     '''Registeration client
     '''
@@ -88,6 +103,10 @@ class RegClient(object):
         self._login_count = 0
         self._login_auth  = ''
         self._phone_cache = 'avaiphones.txt'
+
+        self.reg_process  = []
+
+        clients.append(self)
         
     def login(self):
         self._login_count += 1
@@ -160,18 +179,27 @@ class RegClient(object):
 
     def get_smsvc(self, phone, when):
         url = 'http://{}/1/{}/7?p={}&w={}'.format(self.server, self.name, phone, when)
-
         cookieprocessor = urllib.request.HTTPCookieProcessor(self.cookies)
         self.opener = urllib.request.build_opener(cookieprocessor)
-        req = urllib.request.Request(url)
-        res = self.opener.open(req)
 
-        con = res.read()
-        con = con.decode()
-        logging.info('get sms verify code: %s', con)
+        while True:
+            req = urllib.request.Request(url)
+            res = self.opener.open(req)
+
+            con = res.read()
+            con = con.decode()
+            logging.info('get sms verify code: %s', con)
+            if con != 'timeout':
+                break
         return con
 
-        
+    def report_phone_sms_limited(self, phone):
+        url = 'http://{}/1{}/8?p={}&t=2'.format(self.server, self.name, phone)
+        try:
+            req = urllib.request.Request(url)
+            res = self.opener.open(req)
+        except Exception as err:
+            pass
     
     def start_reg(self):
 
@@ -188,19 +216,26 @@ class RegClient(object):
         else:
             py = 'python3'
             
-        args = [py, 'zcqq.py', '-r', self.config.random, '-s', self.server, '-c', 'ruokuai']
+        for pn in self.available_phones:
+            args = [py, 'zcqq.py', 
+                    '-r', self.config.random, 
+                    '-c', 'ruokuai',
+                    '-m', self.name,
+                    '-s', self.session]
 
-        if self.config.phone == 'local':
-            phones = [p['number'] for p in self.available_phones]
-            args.extend(['-p', 'local', '-pl', ','.join(phones)])
-        elif self.config.phone == 'remote':
-            # TODO design remote interface
-            raise UnImplementationError("phone from remote not implemented.")
+            #if self.config.phone == 'local':
+            #    phones = [p['number'] for p in self.available_phones]
+            #    args.extend(['-p', 'local', '-pl', ','.join(phones)])
+            #elif self.config.phone == 'remote':
+            #    # TODO design remote interface
+            #    raise UnImplementationError("phone from remote not implemented.")
+            args.extend(['-p', pn])
 
-        if self.config.ruokuai:
-            args.extend(['-ru', self.config.rk_user, '-rp', self.config.rk_pass])
+            if self.config.ruokuai:
+                args.extend(['-ru', self.config.rk_user, '-rp', self.config.rk_pass])
             
-        sb = subprocess.Popen(args)
+            sb = subprocess.Popen(args)
+            self.reg_processes.append(sb)
         
         
     def __repr__(self):

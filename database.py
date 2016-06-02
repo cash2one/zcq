@@ -115,6 +115,7 @@ class QzcSmsText(BaseModel):
     text            = Column('text',        VARCHAR(10240))
     com             = Column('com',         VARCHAR(10))
     uname           = Column('uname',       VARCHAR(20), ForeignKey('users.name'))
+    status          = Column('status',      Integer)
     
     def __init__(self, uname, rtime, sfrom, sto, text, com=''):
         self.uname  = uname
@@ -123,6 +124,7 @@ class QzcSmsText(BaseModel):
         self.sto    = sto
         self.text   = text
         self.com    = com
+        self.status = 0
 
     def __repr__(self):
         return 'QzcSmsText({}->{})'.format(self.sfrom, self.sto)
@@ -314,6 +316,22 @@ class QzcDatabaseManager(object):
         ps = query.all()
         return ps
 
+
+    def update_phone_status2(self, phone, status):
+        query = self.session.query(QzcUserPhones)
+        p = query.filter_by(phone=phone).first()
+        if p is None:
+            _logger.info('phone %s not found.', phone)
+            return False
+        try:
+            p.status = status
+            self.session.commit()
+        except Exception as e:
+            _logger.error(e)
+            self.session.rollback()
+            return False
+        return True
+
     def update_action(self, uname, act_id, phone, smsvc):
         #query = self.session.query(QzcActions)
         #act = query.filter_by(phone=phone, uname=uname).first()
@@ -436,8 +454,22 @@ class QzcDatabaseManager(object):
     def query_smsvc(self, devname, phone, when):
         # query smstext table where phone=phone and date>when
         query = self.session.query(QzcSmsText)
-        sms = query.filter(and_(QzcSmsText.sto==phone, QzcSmsText.rtime>=when)).all()
+        sms = query.filter(and_(QzcSmsText.sto==phone, QzcSmsText.rtime>=when, QzcSmsText.status==0)).all()
         return sms
+
+
+    def update_sms_status(self, id_, status):
+        query = self.session.query(QzcSmsText)
+        sms = query.filter_by(id_=id_).first()
+        if sms is not None:
+            sms.status = status
+        try:
+            self.session.commit()
+        except Exception as e:
+            _logger.error(e)
+            self.session.rollback()
+            return False
+        return True
 
 
     def _query_smsvc_dev(self, devname, phone, when):
@@ -585,6 +617,18 @@ if __name__ == '__main__':
     #else:
     #    print('user a not exists')
     #dbman.add_phones('1', ['18049634161'])
+    sms_list = dbman.query_smsvc('', '18157762774', 
+            datetime.strptime('20160530-161000', '%Y%m%d-%H%M%S'))
+    for sms in sms_list:
+        print('sms:')
+        print('id:', sms.id_)
+        print('time:', sms.rtime)
+        print('from:', sms.sfrom)
+        print('to:', sms.sto)
+        print('text:', sms.text)
+        print('status:', sms.status)
+    dbman.update_sms_status(sms.id_, 1)
+    dbman.update_sms_status(sms.id_, 0)
     dbman.close()
     
     

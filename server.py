@@ -405,6 +405,8 @@ def qqzc_dev_getsmsvc(dev):
         if smsvc is None:
             time.sleep(2)
             continue
+
+        id_ = 0
         
         for s in smsvc:
             t = s.text
@@ -413,11 +415,16 @@ def qqzc_dev_getsmsvc(dev):
                     or t.find('【腾讯科技】') > -1
                     or t.find('[腾讯科技]') > -1):
                 smstxt = t
+                id_ = s.id_
                 break
 
         if smstxt:
             break
 
+    if len(smstxt) == 0:
+        return 'timeout'
+
+    _dbman.update_sms_status(id_, 1)
 
     #l = []
 
@@ -483,6 +490,23 @@ def qqzc_dev_getuin(dev):
     if ok:
         return 'ok'
     return 'fail'
+
+
+@bottle.route('/1/<dev>/9')
+def report_phone_status(dev):
+    # 1. check session
+    if 0 != dev_check_session(dev, bottle.request):
+        return 'failed'
+
+    phone  = bottle.request.query.get('p')
+    status = bottle.request.query.get('t')
+    try:
+        t = int(status)
+    except ValueError:
+        return 'status is not correct'
+
+    _dbman.update_phone_status2(phone, t)
+    return 'ok'
 
     
 def run_server(host, port, dbman):

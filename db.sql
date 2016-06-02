@@ -102,6 +102,7 @@ CREATE TABLE smstext(
     text VARCHAR(10240),
     com VARCHAR(10),
     uname VARCHAR(20),
+    status INT,
     PRIMARY KEY(id),
     FOREIGN KEY(uname) REFERENCES users(name)
 );

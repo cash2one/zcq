@@ -19,8 +19,12 @@ parser.add_argument('-ru', '--ruokuai-user', dest='rk_user', type=str,
                    help='if use `-c ruokuai`, this option specifies ruokuai username')
 parser.add_argument('-rp', '--ruokuai-password', dest='rk_pass', type=str,
                    help='if use `-c ruokuai`, this option specifies ruokuai username')
-parser.add_argument('-s', '--server', type=str,
-                    help='Server ip and port')
+#parser.add_argument('-s', '--server', type=str,
+#                    help='Server ip and port')
+parser.add_argument('-s', '--session', dest='dev_session', type=str,
+                    help='device session to report')
+parser.add_argument('-m', '--device', dest='dev_name', type=str,
+                    help='device name to report')
                    
 
 # parser.add_argument('--sum', dest='accumulate', action='store_const',
@@ -39,7 +43,9 @@ qqreg = QQReg(
             phone_list=phone_list,
             rk_user=args.rk_user, 
             rk_pass=args.rk_pass,
-            server=args.server
+            server=args.server,
+            dev_name=args.dev_name,
+            dev_session=args.dev_session
         )
 qqreg.do_reg()
 

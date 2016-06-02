@@ -18,6 +18,8 @@ import rsa # third-party module
 import encryption
 import ruokuai
 
+from devmain import find_regdev_by_session
+
 GENDER_MALE = 1
 GENDER_FEMALE = 2
 
@@ -159,6 +161,8 @@ class QQReg(object):
         self.rk_user        = kwargs.get('rk_user', None)
         self.rk_pass        = kwargs.get('rk_pass', None)
         self.server         = kwargs.get('server', None)
+        self.dev_name       = kwargs.get('dev_name', None)
+        self.dev_session    = kwargs.get('dev_session', None)
         
         # cookie
         self.cookies = http.cookiejar.CookieJar()
@@ -171,6 +175,7 @@ class QQReg(object):
                 datefmt='%Y-%m-%d %H:%M:%S')
         logging_handler.setFormatter(formatter)
         self._logger.addHandler(logging_handler)
+        self.reg_dev = find_regdev_by_session(self.dev_session)
 
         if self.if_rand:
             self._init_rand()
@@ -399,6 +404,7 @@ class QQReg(object):
                 "Referer": self.referer_url
                 }
         try:
+            dt = time.strftime('%Y%m%d-%H%M00')
             self._logger.info('requst %s?%s', url, query)
             cookieprocessor = urllib.request.HTTPCookieProcessor(self.cookies)
             opener = urllib.request.build_opener(cookieprocessor)
@@ -426,6 +432,13 @@ class QQReg(object):
                     pass
                 elif self.phone_from == 'local':
                     self._logger.info('need get sms verify code from %s', self.phone)
+                elif self._check_phone(self.phone_from):
+                    self._logger.info('use phone %s to receive sms', self.phone_from)
+                    # TODO ask remote to receive sms verify code
+                    if self.reg_dev is None:
+                        self._logger.info('session %s is not binded to a client', self.dev_session)
+                    else:
+                        self.smsvc = self.regdev.get_smsvc(self.phone, dt)
             elif ec == 14:
                 # already to limited number
                 self._logger.info('this phone %s received up to limited sms.', self.phone)
@@ -434,6 +447,7 @@ class QQReg(object):
                 #    self.need_reg = False
                 #else:
                 #    self._logger.info('change to use phone %s', self.phone)
+                self.regdev.report_limited(self.phone)
             elif ec == 16:
                 # TODO sms check error: what is this?
                 pass
@@ -517,8 +531,9 @@ class QQReg(object):
             con1 = con.decode()
             self._logger.info(con1)
             o = json.loads(con1)
+            filename = os.path.join('request_cache', self.start_time)
 
-            with open(self.start_time, "ab+") as f:
+            with open(filename, "ab+") as f:
                 f.write(b'getacc response: \n')
                 f.write(con)
                 f.write(b'\n\n\n')
