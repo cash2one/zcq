@@ -132,6 +132,13 @@ def admin_sms():
     sms = _dbman.query_sms()
     return bottle.template('tpl/admin_sms.tpl', user='admin', sms=sms)
 
+
+@bottle.route('/admin/uin')
+def admin_uin():
+    aaa.require(role='admin', fail_redirect='/login')
+    uin = _dbman.query_uin()
+    return bottle.template('tpl/admin_uin.tpl', user='admin', uin=uin)
+
     
 @bottle.route('/1/<name>/1', method='post')
 def qqzc_init(name):
@@ -327,14 +334,17 @@ def dev_check_session(dev, req):
     '''check if dev exists and if the session is valid'''
     # 1. check dev name
     if not _dbman.dev_exist(dev):
+        _logger.info('device does not exist')
         return 1 # 'not exist.'
     # check session
     s = req.get_cookie('s')
     ip = req.environ.get('REMOTE_ADDR')
+    _logger.info('ip: %s, session: %s', ip, s)
     if (s is None 
             or len(s) == 0
             or ip not in _dev_session
             or _dev_session[ip] != s):
+        _logger.info('authorized failure')
         return 2 # 'authorized failure'
 
     return 0 # 'ok'
@@ -410,7 +420,7 @@ def qqzc_dev_getsmsvc(dev):
         
         for s in smsvc:
             t = s.text
-            _logger.info('message:', t)
+            #_logger.info('message: %s', t)
             if (t.find('[tencent]') > -1 
                     or t.find('【腾讯科技】') > -1
                     or t.find('[腾讯科技]') > -1):

@@ -18,7 +18,8 @@ import rsa # third-party module
 import encryption
 import ruokuai
 
-from devmain import find_regdev_by_session
+#from devmain import find_regdev_by_session
+from devmain import RegClient
 
 GENDER_MALE = 1
 GENDER_FEMALE = 2
@@ -163,6 +164,10 @@ class QQReg(object):
         self.server         = kwargs.get('server', None)
         self.dev_name       = kwargs.get('dev_name', None)
         self.dev_session    = kwargs.get('dev_session', None)
+        self.configfile     = kwargs.get('config', 'client.ini')
+
+        # reg client
+        self.regdev = RegClient.from_session(self.dev_session, self.configfile)
         
         # cookie
         self.cookies = http.cookiejar.CookieJar()
@@ -175,7 +180,6 @@ class QQReg(object):
                 datefmt='%Y-%m-%d %H:%M:%S')
         logging_handler.setFormatter(formatter)
         self._logger.addHandler(logging_handler)
-        self.reg_dev = find_regdev_by_session(self.dev_session)
 
         if self.if_rand:
             self._init_rand()
@@ -198,9 +202,11 @@ class QQReg(object):
                 os.makedirs(self.captcha_path)
             except OSError as e:
                 raise
-        if not os.path.isdir("requst_cache"):
+
+        self.req_cache = 'request_cache'
+        if not os.path.isdir(self.req_cache):
             try:
-                os.makedirs("requst_cache")
+                os.makedirs(self.req_cache)
             except OSError as e:
                 raise
         
@@ -352,7 +358,7 @@ class QQReg(object):
             self.cookies.extract_cookies(res, req)
 
 
-            init_result_file = os.path.join("requst_cache", "{}.res".format(self.start_time))
+            init_result_file = os.path.join(self.req_cache, "{}.res".format(self.start_time))
             with open(init_result_file, "ab+") as f:
                 f.seek(0, 2)
                 f.write(con)
@@ -422,8 +428,17 @@ class QQReg(object):
             if ec == 0:
                 # send sms ok
                 self._logger.info('phone number ok, receive sms verify code')
-                if self.phone_from == 'console' or self.phone == self.phone_from:
+                if self.phone_from == 'console': 
                     self.smsvc = input('Please input sms verify code: ')
+                elif self.phone == self.phone_from:
+                    # receive phone from remote
+                    # TODO use more elegant way
+                    self._logger.info('use phone %s to receive sms', self.phone_from)
+                    # TODO ask remote to receive sms verify code
+                    if self.regdev is None:
+                        self._logger.info('session %s is not binded to a client', self.dev_session)
+                    else:
+                        self.smsvc = self.regdev.get_smsvc(self.phone, dt)
                 elif self.phone_from == 'carddrive':
                     # TODO use card drive to receive sms verify code
                     pass
@@ -435,7 +450,7 @@ class QQReg(object):
                 elif self._check_phone(self.phone_from):
                     self._logger.info('use phone %s to receive sms', self.phone_from)
                     # TODO ask remote to receive sms verify code
-                    if self.reg_dev is None:
+                    if self.regdev is None:
                         self._logger.info('session %s is not binded to a client', self.dev_session)
                     else:
                         self.smsvc = self.regdev.get_smsvc(self.phone, dt)
@@ -449,7 +464,7 @@ class QQReg(object):
                 #    self._logger.info('change to use phone %s', self.phone)
                 self.regdev.report_phone_sms_limited(self.phone)
             elif ec == 16:
-                # TODO sms check error: what is this?
+                # sms check error: no smsvc
                 pass
             elif ec == 4 or ec == 31:
                 # phone format invalid
@@ -489,7 +504,7 @@ class QQReg(object):
 
     def _check_phone(self, maybephone):
         maybephone = maybephone.strip()
-        return (mybephone.startswith('1') 
+        return (maybephone.startswith('1') 
                 and len(maybephone) == 11 
                 and maybephone.isnumeric())
 
@@ -532,7 +547,7 @@ class QQReg(object):
             con1 = con.decode()
             self._logger.info(con1)
             o = json.loads(con1)
-            filename = os.path.join('request_cache', self.start_time)
+            filename = os.path.join(self.req_cache, self.start_time)
 
             with open(filename, "ab+") as f:
                 f.write(b'getacc response: \n')

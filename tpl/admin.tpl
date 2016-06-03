@@ -52,6 +52,7 @@
     <div>
     <a href="/admin/phones">显示电话号码 </a> <br />
     <a href="/admin/sms">查看短信记录</a> <br />
+    <a href="/admin/uin">查看QQ号码</a> <br />
     <a href="/logout">退出登录 </a>
     </div>
     <div>

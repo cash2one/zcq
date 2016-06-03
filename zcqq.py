@@ -25,6 +25,8 @@ parser.add_argument('-s', '--session', dest='dev_session', type=str,
                     help='device session to report')
 parser.add_argument('-m', '--device', dest='dev_name', type=str,
                     help='device name to report')
+parser.add_argument('-cf', '--config', type=str,
+                    help='configure file to use')
                    
 
 # parser.add_argument('--sum', dest='accumulate', action='store_const',
@@ -43,9 +45,10 @@ qqreg = QQReg(
             phone_list=phone_list,
             rk_user=args.rk_user, 
             rk_pass=args.rk_pass,
-            server=args.server,
+            #server=args.server,
             dev_name=args.dev_name,
-            dev_session=args.dev_session
+            dev_session=args.dev_session,
+            config=args.config
         )
 qqreg.do_reg()
 

@@ -512,6 +512,13 @@ class QzcDatabaseManager(object):
         else:
             return True
 
+
+    def query_uin(self):
+        query = self.session.query(QzcUin)
+        uin = query.all()
+        return uin
+
+
     def query_smsvc_usr(self, name, status):
         # 1. query phone numbers
         _logger.info('query name %s', name)

@@ -88,7 +88,10 @@ class ClientConfig(object):
 clients = []
 
 def find_regdev_by_session(session):
+    logging.info('find session: %s', session)
+    logging.info('count of clients: %d', len(clients))
     for c in clients:
+        logging.info('regclient session: %s', c.session)
         if c.session == session:
             return c
     return 
@@ -104,6 +107,7 @@ class RegClient(object):
     '''
     
     def __init__(self, configfile):
+        self.configfile = configfile
         self.config     = ClientConfig(configfile)
         self.server     = self.config.server
         self.name       = self.config.sv_user
@@ -114,10 +118,58 @@ class RegClient(object):
         self._login_count = 0
         self._login_auth  = ''
         self._phone_cache = 'avaiphones.txt'
+        self.available_phones = []
 
         self.reg_process  = []
 
-        clients.append(self)
+        #global clients
+        #clients.append(self)
+        #logging.info('New RegClient. len(clients)=%d', len(clients))
+
+
+    @staticmethod
+    def from_session(session, configfile='client.ini'):
+        rc = RegClient(configfile)
+        rc.build_session(session)
+        rc.build_opener()
+        return rc
+
+
+    def build_session(self, session):
+        self.session = session
+        path = '/1/{}'.format(self.name)
+        cook = http.cookiejar.Cookie(
+                '0',        # version
+                's',        # name
+                session,    # value
+                None,       # port
+                False,      # port_specified
+                #self.server,# domain
+                '192.168.0.2',
+                True,       # domain_specified
+                False,      # domain_initial_dot
+                path,       # path,
+                True,       # path_specified
+                False,      # secure
+                None,       # expires
+                True,       # discard
+                None,       # comment
+                None,       # comment_url
+                ()          # rest
+                )
+        self.cookies.set_cookie(cook)
+        #logging.info('cookies: %s', self.cookies)
+
+
+    def build_opener(self):
+        logging.info('cookies: %s', self.cookies)
+        for ck in self.cookies:
+            print('version:', ck.version)
+            #print('rfc2965:', ck.rfc2965)
+        cookieprocessor = urllib.request.HTTPCookieProcessor(self.cookies)
+        logging.info('cookies(from HTTPCookieProcessor): %s', cookieprocessor.cookiejar)
+        self.opener = urllib.request.build_opener(cookieprocessor)
+
         
     def login(self):
         self._login_count += 1
@@ -129,8 +181,7 @@ class RegClient(object):
             self._login_count = 0
             raise LoginFailException('Login has been tried too many times')
         
-        cookieprocessor = urllib.request.HTTPCookieProcessor(self.cookies)
-        self.opener = urllib.request.build_opener(cookieprocessor)
+        self.build_opener()
         req = urllib.request.Request(url)
         res = self.opener.open(req)
         
@@ -189,9 +240,11 @@ class RegClient(object):
 
 
     def get_smsvc(self, phone, when):
+        logging.info('cookies: %s', self.cookies)
         url = 'http://{}/1/{}/7?p={}&w={}'.format(self.server, self.name, phone, when)
-        cookieprocessor = urllib.request.HTTPCookieProcessor(self.cookies)
-        self.opener = urllib.request.build_opener(cookieprocessor)
+        #cookieprocessor = urllib.request.HTTPCookieProcessor(self.cookies)
+        #self.opener = urllib.request.build_opener(cookieprocessor)
+        count = 0
 
         while True:
             req = urllib.request.Request(url)
@@ -202,10 +255,16 @@ class RegClient(object):
             logging.info('get sms verify code: %s', con)
             if con != 'timeout':
                 break
+            count += 1
+            if count > 10:
+                logging.info('try too many times.')
+                break
+            time.sleep(10) # wait for 10 seconds
         return con
 
 
     def report_phone_sms_limited(self, phone):
+        logging.info('phone number %s is limited', phone)
         url = 'http://{}/1{}/8?p={}&t=2'.format(self.server, self.name, phone)
         try:
             req = urllib.request.Request(url)
@@ -215,6 +274,7 @@ class RegClient(object):
 
 
     def report_phone_invalid(self, phone):
+        logging.info('phone number %s is invalid', phone)
         url = 'http://{}/1{}/8?p={}&t=3'.format(self.server, self.name, phone)
         try:
             req = urllib.request.Request(url)
@@ -286,6 +346,7 @@ class RegClient(object):
             
         for pn in self.available_phones:
             args = [py, 'zcqq.py', 
+                    '-cf', self.configfile,
                     '-r', self.config.random, 
                     '-c', 'ruokuai',
                     '-m', self.name,
@@ -297,19 +358,25 @@ class RegClient(object):
             #elif self.config.phone == 'remote':
             #    # TODO design remote interface
             #    raise UnImplementationError("phone from remote not implemented.")
-            args.extend(['-p', pn])
+            args.extend(['-p', pn['number']])
 
             if self.config.ruokuai:
                 args.extend(['-ru', self.config.rk_user, '-rp', self.config.rk_pass])
+
+            #for i,a in enumerate(args):
+            #    print('arg {}: {}'.format(i, a))
+            logging.info('start process: %s', ' '.join(args))
+            #continue
             
             sb = subprocess.Popen(args)
             self.reg_process.append(sb)
+            sb.wait()
             
             # sleep for some time
             time.sleep(self.config.interval)
 
-        for sb in self.reg_process:
-            sb.wait()
+        #for sb in self.reg_process:
+        #    sb.wait()
         
         
     def __repr__(self):
@@ -317,17 +384,29 @@ class RegClient(object):
     
 
 if __name__ == '__main__':
-    rc = RegClient('client.ini')
-    try:
-        ok = rc.login()
-    except Exception as e:
-        logging.error(e)
-        sys.exit(0)
+    from_local = 1
+    if from_local:
+        rc = RegClient('client.ini')
+        try:
+            ok = rc.login()
+        except Exception as e:
+            logging.error(e)
+            sys.exit(0)
+        else:
+            logging.info('login ok')
+        #    rc.get_phones()
+        #rc.get_smsvc('18157762774', '20160530-161000')
     else:
-        logging.info('login ok')
-        rc.get_phones()
-    #rc.start_reg()
-    #rc.get_smsvc('18157762774', '20160530-161000')
-    rc.report_uin('2587277158', '28v39vaFY999', nick='28v39vaFY', phone='18157762594')
+        #rc = RegClient.from_session('27c9ffcc352c9f744e3d39db135989a6', 'client.ini')
+        rc = RegClient.from_session('960902ca6cad7e983cd238e220748c60', 'client.ini')
+    #vc = rc.get_smsvc('18157762549', '20160603-004100')
+    #print('sms vc: ', vc)
+    #rc.report_uin('2587277158', '28v39vaFY999', nick='28v39vaFY', phone='18157762594')
+    #rc.report_uin('3483930776', 'DafNJwV38A2lu999', 
+    #        nick='DafNJwV38A2lu', phone='18157762774', 
+    #        country=1, province=54, city=1, 
+    #        nongli=0, birth='1984-5-23', 
+    #        gender=1)
+    rc.start_reg()
         
 
