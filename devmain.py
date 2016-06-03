@@ -13,6 +13,7 @@ import configparser
 import urllib.parse
 import urllib.request
 import http.cookiejar
+import rsa
 
 FORMAT = '[%(asctime)-15s] %(levelname)s %(message)s'
 logging.basicConfig(format=FORMAT, level=logging.DEBUG)
@@ -41,6 +42,16 @@ class ClientConfig(object):
     @property
     def phone(self):
         return self.config['Registration']['phone']
+
+
+    @property
+    def interval(self):
+        return int(self.config['Registration']['interval'])
+
+
+    @property
+    def pubkey(self):
+        return self.config['Registration']['pubkey']
 
 
     @property
@@ -193,6 +204,7 @@ class RegClient(object):
                 break
         return con
 
+
     def report_phone_sms_limited(self, phone):
         url = 'http://{}/1{}/8?p={}&t=2'.format(self.server, self.name, phone)
         try:
@@ -200,6 +212,62 @@ class RegClient(object):
             res = self.opener.open(req)
         except Exception as err:
             pass
+
+
+    def report_phone_invalid(self, phone):
+        url = 'http://{}/1{}/8?p={}&t=3'.format(self.server, self.name, phone)
+        try:
+            req = urllib.request.Request(url)
+            res = self.opener.open(req)
+        except Exception as err:
+            pass
+
+
+    def report_uin(self, uin, password, *args, **kwargs):
+        url = 'http://{}/1/{}/8'.format(self.server, self.name)
+        # uin         = bottle.request.forms.get('uin')
+        # ursapass    = bottle.request.forms.get('password')
+        # unick       = bottle.request.forms.get('nick')
+        # ucountry    = bottle.request.forms.get('country')
+        # uprovince   = bottle.request.forms.get('province')
+        # ucity       = bottle.request.forms.get('city')
+        # ubirth      = bottle.request.forms.get('birth')
+        # ugender     = bottle.request.forms.get('gender')
+        # uphone      = bottle.request.forms.get('phone')
+        # unongli     = bottle.request.forms.get('nongli')
+        # uregion     = bottle.request.forms.get('region')
+        
+        # rsa public key
+        with open(self.config.pubkey) as f:
+            con = f.read()
+        pub_key = rsa.PublicKey.load_pkcs1(con)
+        rsapass = rsa.encrypt(password.encode(), pub_key)
+        b64pass = base64.b64encode(rsapass).decode()
+
+        params  = {
+                'uin'     : uin,
+                'password': urllib.parse.quote(b64pass),
+                'nick'    : kwargs.get('nick', ''),
+                'country' : kwargs.get('country', 1),
+                'province': kwargs.get('province', 11),
+                'city'    : kwargs.get('city', 1),
+                'birth'   : kwargs.get('birth', '1991-1-1'),
+                'gender'  : kwargs.get('gender', 1),
+                'phone'   : kwargs.get('phone', ''),
+                'nongli'  : kwargs.get('nongli', 0),
+                'region'  : kwargs.get('region', self.config.region)
+        }
+
+        query   = 'uin={uin}&password={password}&nick={nick}&country={country}&province={province}&city={city}&birth={birth}&gender={gender}&phone={phone}&nongli={nongli}&region={region}'.format(**params)
+        logging.info('url: %s', url)
+        logging.info('query: %s', query)
+        try:
+            req = urllib.request.Request(url, query.encode())
+            res = self.opener.open(req)
+        except Exception as err:
+            logging.error(err)
+
+
     
     def start_reg(self):
 
@@ -235,7 +303,13 @@ class RegClient(object):
                 args.extend(['-ru', self.config.rk_user, '-rp', self.config.rk_pass])
             
             sb = subprocess.Popen(args)
-            self.reg_processes.append(sb)
+            self.reg_process.append(sb)
+            
+            # sleep for some time
+            time.sleep(self.config.interval)
+
+        for sb in self.reg_process:
+            sb.wait()
         
         
     def __repr__(self):
@@ -253,6 +327,7 @@ if __name__ == '__main__':
         logging.info('login ok')
         rc.get_phones()
     #rc.start_reg()
-    rc.get_smsvc('18157762774', '20160530-161000')
+    #rc.get_smsvc('18157762774', '20160530-161000')
+    rc.report_uin('2587277158', '28v39vaFY999', nick='28v39vaFY', phone='18157762594')
         
 

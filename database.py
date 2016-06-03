@@ -504,7 +504,7 @@ class QzcDatabaseManager(object):
 
         try:
             self.session.add(uin)
-            self.commit()
+            self.session.commit()
         except Exception as e:
             _logger.error(e)
             self.session.rollback()

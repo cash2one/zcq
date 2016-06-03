@@ -468,14 +468,14 @@ def qqzc_dev_getuin(dev):
 
     # nongli and gender need convert to int
     try:
-        nongli = int(nongli)
+        nongli = int(unongli)
     except ValueError:
         if nongli.lower() == 'true':
             nongli = 1
         else:
             nongli = 0
     try:
-        gender = int(gender)
+        gender = int(ugender)
     except ValueError:
         if gender.lower() == 'female':
             gender = 2

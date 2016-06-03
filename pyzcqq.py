@@ -447,13 +447,14 @@ class QQReg(object):
                 #    self.need_reg = False
                 #else:
                 #    self._logger.info('change to use phone %s', self.phone)
-                self.regdev.report_limited(self.phone)
+                self.regdev.report_phone_sms_limited(self.phone)
             elif ec == 16:
                 # TODO sms check error: what is this?
                 pass
             elif ec == 4 or ec == 31:
                 # phone format invalid
                 self._logger.info('invalid phone: %s', self.phone)
+                self.regdev.report_phone_invalid(self.phone)
             else:
                 self._looger.info('error code: %d, will retry later', ec)
 
@@ -544,6 +545,7 @@ class QQReg(object):
                 self._logger.info("got qq number: %s", o["uin"])
                 # TODO save it to database
                 self.goods += 1
+                self.regdev.report_uin()
             elif ec == 2:
                 # captcha error
                 self._logger.info('capthcha error')
