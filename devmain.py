@@ -265,17 +265,37 @@ class RegClient(object):
 
     def report_phone_sms_limited(self, phone):
         logging.info('phone number %s is limited', phone)
-        url = 'http://{}/1{}/8?p={}&t=2'.format(self.server, self.name, phone)
+        try:
+            self.available_phones.remove(phone)
+        except ValueError:
+            logging.info('phone %s does not in available phone list', phone)
+        else:
+            logging.info('phone %s has been removed from available phone list', phone)
+
+        # report to server
+        url = 'http://{}/1/{}/9?p={}&t=2'.format(self.server, self.name, phone)
         try:
             req = urllib.request.Request(url)
             res = self.opener.open(req)
         except Exception as err:
             pass
+        else:
+            con = res.read()
+            con = con.decode()
+            logging.info('server response: %s', con)
 
 
     def report_phone_invalid(self, phone):
         logging.info('phone number %s is invalid', phone)
-        url = 'http://{}/1{}/8?p={}&t=3'.format(self.server, self.name, phone)
+        try:
+            self.available_phones.remove(phone)
+        except ValueError:
+            logging.info('phone %s does not in available phone list', phone)
+        else:
+            logging.info('phone %s has been removed from available phone list', phone)
+
+        # report to server
+        url = 'http://{}/1{}/9?p={}&t=3'.format(self.server, self.name, phone)
         try:
             req = urllib.request.Request(url)
             res = self.opener.open(req)
@@ -330,11 +350,25 @@ class RegClient(object):
 
     
     def start_reg(self):
-
         # read from cache
         with open(self._phone_cache, 'rb') as f:
             con = f.read()
             self.available_phones.extend(json.loads(con.decode()))
+
+        while True:
+            while len(self.available_phones) == 0:
+                self.get_phones()
+                time.sleep(10) # sleep for 10 seconds
+
+            try:
+                self._reg_proc()
+            except NoPhoneException as err:
+                logging.info(err)
+            except KeyboardInterrupt as err:
+                break
+
+
+    def _reg_proc(self):
 
         if len(self.available_phones) == 0:
             raise  NoPhoneException('no avaiable phone numbers')
@@ -407,6 +441,9 @@ if __name__ == '__main__':
     #        country=1, province=54, city=1, 
     #        nongli=0, birth='1984-5-23', 
     #        gender=1)
+    #rc.report_uin('3276590752', 'tawi7tYFp999', nick='tawi7tYFp', phone='18157762549',
+    #        country=1, province=35, city=3, birth='1973-10-20', gender=1)
     rc.start_reg()
-        
+    #rc.report_phone_sms_limited('18157762549')
+
 

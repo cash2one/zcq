@@ -51,6 +51,7 @@ qqreg = QQReg(
             config=args.config
         )
 qqreg.do_reg()
+#qqreg._test_report_uin('testnumber')
 
 if __name__ == '__main__':
     pass

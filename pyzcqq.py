@@ -399,6 +399,7 @@ class QQReg(object):
             self.need_reg = False
             return
         self.elevel = 3
+        do_next = True # if continue to register
 
         # send smsvc
         url = self.sendsms_url
@@ -410,7 +411,7 @@ class QQReg(object):
                 "Referer": self.referer_url
                 }
         try:
-            dt = time.strftime('%Y%m%d-%H%M00')
+            self.sms_from_dt = dt = time.strftime('%Y%m%d-%H%M00')
             self._logger.info('requst %s?%s', url, query)
             cookieprocessor = urllib.request.HTTPCookieProcessor(self.cookies)
             opener = urllib.request.build_opener(cookieprocessor)
@@ -457,21 +458,27 @@ class QQReg(object):
             elif ec == 14:
                 # already to limited number
                 self._logger.info('this phone %s received up to limited sms.', self.phone)
-                self.phone = '' # self.next_phone()
                 #if not self.phone:
                 #    self.need_reg = False
                 #else:
                 #    self._logger.info('change to use phone %s', self.phone)
                 self.regdev.report_phone_sms_limited(self.phone)
+                self.phone = '' # self.next_phone()
+                do_next = False
             elif ec == 16:
                 # sms check error: no smsvc
-                pass
+                do_next = False
+
             elif ec == 4 or ec == 31:
                 # phone format invalid
                 self._logger.info('invalid phone: %s', self.phone)
                 self.regdev.report_phone_invalid(self.phone)
+                do_next = False
             else:
                 self._looger.info('error code: %d, will retry later', ec)
+                do_next = False
+
+        return do_next
 
     
     def next_phone(self):
@@ -557,10 +564,22 @@ class QQReg(object):
             ec = o["ec"]
             if ec == 0:
                 # OK !
+                uin = o['uin']
                 self._logger.info("got qq number: %s", o["uin"])
                 # TODO save it to database
                 self.goods += 1
-                self.regdev.report_uin()
+                self.regdev.report_uin(uin, self.password,
+                        nick=self.nickname,
+                        phone=self.phone,
+                        province=self.province,
+                        country=self.country,
+                        city=self.city,
+                        birth='{}-{}-{}'.format(self.year, self.month, self.day),
+                        gender=self.gender)
+                # clean some parameter
+                self.phone = '' 
+                self.code  = ''
+                self.smsvc = ''
             elif ec == 2:
                 # captcha error
                 self._logger.info('capthcha error')
@@ -586,10 +605,41 @@ class QQReg(object):
                 # parameter error
                 self._logger.info('paramter error, please check!')
                 self.need_reg = False
+            elif ec == 16:
+                # smsvc error
+                self._logger.info('smsvc error, please check!')
+                dt = self.sms_from_dt
+                #self.smsvc = 
+                if self.phone_from == 'console': 
+                    self.smsvc = input('Please input sms verify code: ')
+                elif self.phone == self.phone_from:
+                    # receive phone from remote
+                    # TODO use more elegant way
+                    self._logger.info('use phone %s to receive sms', self.phone_from)
+                    # TODO ask remote to receive sms verify code
+                    if self.regdev is None:
+                        self._logger.info('session %s is not binded to a client', self.dev_session)
+                    else:
+                        self.smsvc = self.regdev.get_smsvc(self.phone, dt)
+                elif self.phone_from == 'carddrive':
+                    # TODO use card drive to receive sms verify code
+                    pass
+                elif self.phone_from == 'remote':
+                    # TODO use c/s mode to receive sms verify code
+                    pass
+                elif self.phone_from == 'local':
+                    self._logger.info('need get sms verify code from %s', self.phone)
+                elif self._check_phone(self.phone_from):
+                    self._logger.info('use phone %s to receive sms', self.phone_from)
+                    # TODO ask remote to receive sms verify code
+                    if self.regdev is None:
+                        self._logger.info('session %s is not binded to a client', self.dev_session)
+                    else:
+                        self.smsvc = self.regdev.get_smsvc(self.phone, dt)
             elif ec == 20:
                 # need phone number to receive sms verify code
                 self._logger.info('need send sms')
-                self.input_phone()
+                self.need_reg = self.input_phone()
                 #if self.phone is None:
                 #    self.need_reg = False
             elif ec == 21:
@@ -684,10 +734,23 @@ class QQReg(object):
     def __repr__(self):
         return self.__str__()
 
+
+    def _test_report_uin(self, uin):
+        self.regdev.report_uin(uin, self.password,
+                nick=self.nickname,
+                phone=self.phone,
+                province=self.province,
+                country=self.country,
+                city=self.city,
+                birth='{}-{}-{}'.format(self.year, self.month, self.day),
+                gender=self.gender)
+
+
+
 if __name__ == '__main__':
     qr = QQReg(random=True)
     
-    print(qr)
+    #print(qr)
    
     #qr.init_reg()
     #qr.input_captcha()
