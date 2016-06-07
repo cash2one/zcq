@@ -299,7 +299,7 @@ class QQReg(object):
             return
         if self.captcha_from == 'console':
             # read captcha from console
-            self.verifycode = input("Please input what you see in \"{}\":".format(self.captha_name))
+            self.verifycode = input("Please input what you see in \"{}\":".format(self.captcha_name))
             
         elif self.captcha_from == 'ruokuai':
             # use ruokuai

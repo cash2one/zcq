@@ -4,7 +4,7 @@
 import os
 import sys
 import argparse
-from pyzcqq import QQReg
+#from pyzcqq import QQReg
 
 parser = argparse.ArgumentParser(description='QQ register configuration.')
 parser.add_argument('-r', '--random', type=int,
@@ -27,6 +27,8 @@ parser.add_argument('-m', '--device', dest='dev_name', type=str,
                     help='device name to report')
 parser.add_argument('-cf', '--config', type=str,
                     help='configure file to use')
+parser.add_argument('-a', '--region', type=str,
+                    help='configure file to use')
                    
 
 # parser.add_argument('--sum', dest='accumulate', action='store_const',
@@ -37,6 +39,13 @@ parser.add_argument('-cf', '--config', type=str,
 args = parser.parse_args()
 
 phone_list = args.phone_list.split(',') if args.phone_list is not None else None
+
+if args.region == 'cht':
+    from qqcht import QQReg
+elif args.region == 'chs':
+    from qqchs import QQReg
+else:
+    raise ValueError('Unknown region: {}'.format(args.region))
 
 qqreg = QQReg(
             random=args.random, 
