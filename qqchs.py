@@ -14,6 +14,7 @@ import urllib.parse
 import urllib.request
 import http.cookiejar
 import rsa # third-party module
+import mmh3 # third-party module
 import encryption
 import ruokuai
 
@@ -32,7 +33,8 @@ class QQReg(object):
     monikey_url = "http://a.zc.qq.com/Cgi-bin/MoniKey?"
     captcha_url = "http://captcha.qq.com/getimage?aid=1007901&r={}"
     referer_url = "http://zc.qq.com/chs/index.html"
-    user_agent  = "Mozilla/5.0 (Windows NT 5.1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/49.0.2623.75 Safari/537.36"
+    #user_agent  = "Mozilla/5.0 (Windows NT 5.1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/49.0.2623.75 Safari/537.36"
+    user_agent  = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:46.0) Gecko/20100101 Firefox/46.0"
     aq_input = {
             "nick": 1,
             "phone_num": 2,
@@ -164,6 +166,7 @@ class QQReg(object):
         
     def _refresh_captha(self):
         #self.init_reg()
+        self.init_cap_cookie()
         self.cap_union_check_new()
         self.cap_union_show_new()
         self.cap_union_getcapbysig_new()
@@ -229,6 +232,7 @@ class QQReg(object):
                 if ok == 0:
                     return True
                 else:
+                    paramKeys = ['username', 'password', 'softid', 'softkey', 'id']
                     paramDict = {
                             'username': self.rk_user, 
                             'password': self.rk_pass,
@@ -237,7 +241,7 @@ class QQReg(object):
                             'id': self._rk_tid,
                             }
                     url = 'http://api.ruokuai.com/reporterror.json'
-                    con = rk.http_report_error(url, paramDict)
+                    con = rk.http_report_error(url, paramDict, paramKeys)
                     obj = json.loads(con)
                     self._logger.info('report error to ruokuai')
                     self._logger.info('ruokuai returns: %s', con)
@@ -287,13 +291,22 @@ class QQReg(object):
         self.__send_monikey('nick', self.nickname)
         self.__send_monikey('password', self.password)
         self.__send_monikey('password_again', self.password)
+        self.__send_monikey('year_value')
+        self.__send_monikey('month_value')
+        self.__send_monikey('day_value')
+        self.__send_monikey('country_value')
+        self.__send_monikey('province_value')
+        self.__send_monikey('city_value')
 
-    def __send_monikey(self, name, text):
+    def __send_monikey(self, name, text=None):
     # TODO sleep for a while to send monikey request
         time.sleep(3)
         tm = '{0:.0f}'.format(time.time())
         tp = self.aq_input.get(name, 'year_value')
-        query = '&'.join('{}|{}|{}'.format(ord(c), tp, tm) for c in text)
+        if text is not None:
+            query = '&'.join('{}|{}|{}'.format(ord(c), tp, tm) for c in text)
+        else:
+            query = '0|{}|{}'.format(tp, tm)
         headers = {
                 "User-Agent": self.user_agent,
                 "Referer": self.referer_url
@@ -314,6 +327,10 @@ class QQReg(object):
     def check_phone(self):
         # http://zc.qq.com/cgi-bin/common/check_phone?telphone=18049634161&r=0.31673819818619764&
         url = 'http://zc.qq.com/cgi-bin/common/check_phone?telphone={}&r={}'.format(self.phone, random.random())
+        headers = {
+                "User-Agent": self.user_agent,
+                "Referer": self.referer_url
+                }
         try:
             self._logger.info('requst %s', url)
             cookieprocessor = urllib.request.HTTPCookieProcessor(self.cookies)
@@ -322,6 +339,7 @@ class QQReg(object):
             res = opener.open(req)
         except Exception as e:
             self._logger.critical(e)
+            return False
         else:
             con = res.read()
             con = con.decode()
@@ -489,6 +507,14 @@ class QQReg(object):
                 "User-Agent": self.user_agent,
                 "Referer": self.referer_url
                 }
+        # uoc
+        uoc = '{0}-0-{1}-0-{1}-0-0-{2}'.format(
+            len(self.nickname),
+            len(self.password),
+            len(self.nickname) + 2 * len(self.password),
+            )
+        cookie_uoc = self._new_cookie('uoc', uoc, '.zc.qq.com')
+        self.cookies.set_cookie(cookie_uoc)
 
         try:
             self._logger.info('url: %s', url)
@@ -680,20 +706,102 @@ class QQReg(object):
                 self.province, self.__province_name(), 
                 self.city, self.__city_name(), 
                 self.year, self.month, self.day)
+    
+    
+    @staticmethod
+    def _new_cookie(name, value, domain='qq.com', path='/', expires=None):
+        if expires is not None:
+            tm = time.strptime(expires, '%a, %d %b %Y %H:%M:%S GMT')
+            expires = round(time.mktime(tm))
+        return http.cookiejar.Cookie(
+            '0',        # version
+            name,       # name
+            value,      # value
+            None,       # port
+            False,      # port_specified
+            domain,     # domain
+            True,       # domain_specified
+            False,      # domain_initial_dot
+            path,       # path,
+            True,       # path_specified
+            False,      # secure
+            expires,    # expires
+            True,       # discard
+            None,       # comment
+            None,       # comment_url
+            ()          # rest
+            )
         
         
+    def init_cap_cookie(self):
+        # cookie:
+        # pgv_pvid=7468445178; pgv_info=ssid=s6826362800; pgv_pvi=9291276288; pgv_si=s4117469184; TDC_token=3794683095
+        # a = Math.round(Math.random() * 2147483647) * (new Date).getUTCMilliseconds() % 1E10
+        # pgv_pvid = $a; path=/; domain=qq.com; expires=Sun, 18 Jan 2038 00:00:00 GMT;"
+        # c = Math.round(Math.random() * 2147483647) * (new Date).getUTCMilliseconds() % 1E10
+        # pgv_info=ssid=s + $c + ; path=/; domain=qq.com;
+        def _cv():
+            return str(round(random.random()*2147483647 * (time.time()*1000) % 1e10))
+        
+        pgv_pvid = _cv()
+        cookie_pgv_pvid = self._new_cookie('pgv_pvid', pgv_pvid, expires='Sun, 18 Jan 2038 00:00:00 GMT')
+        
+        pgv_info = 's'+_cv()
+        cookie_pgv_info = self._new_cookie('pgv_info', pgv_info)
+        
+        pgv_si = 's'+_cv()
+        cookie_pgv_si = self._new_cookie('pgv_si', pgv_si)
+        
+        pgv_pvi = _cv()
+        cookie_pgv_pvi = self._new_cookie('pgv_pvi', pgv_pvi, expires="Sun, 18 Jan 2038 00:00:00 GMT")
+        
+        # TDC_token=3794683095
+        TDC_token = str(abs(mmh3.hash('foo', 32)))
+        cookie_TDC_token = self._new_cookie('TDC_token', TDC_token,)
+        
+        # used only for captcha
+        self.cap_cookie = http.cookiejar.CookieJar()
+        self.cap_cookie.set_cookie(cookie_pgv_pvid)
+        self.cap_cookie.set_cookie(cookie_pgv_info)
+        self.cap_cookie.set_cookie(cookie_pgv_si)
+        self.cap_cookie.set_cookie(cookie_pgv_pvi)
+        self.cap_cookie.set_cookie(cookie_TDC_token)
+        
+        # save them to cookies
+        self.cookies.set_cookie(cookie_pgv_pvid)
+        self.cookies.set_cookie(cookie_pgv_info)
+        self.cookies.set_cookie(cookie_pgv_si)
+        self.cookies.set_cookie(cookie_pgv_pvi)
+        self.cookies.set_cookie(cookie_TDC_token)
+        
+        cookieprocessor = urllib.request.HTTPCookieProcessor(self.cap_cookie)
+        self.cap_opener = urllib.request.build_opener(cookieprocessor)
+        
+
     def cap_union_check_new(self):
         # ?aid=1600000592&clientype=2&lang=1028
         # https://ssl.captcha.qq.com/cap_union_check_new?aid=1600000592&captype=&protocol=https&uin=&clientype=2&rand=0.9338748481637782
-        url = 'https://ssl.captcha.qq.com/cap_union_check_new??aid=1600000592&clientype=2&lang=1028&captype=&protocol=https&uin=&rand={}'.format(random.random())
+        url = 'https://ssl.captcha.qq.com/cap_union_check_new?aid=1600000592&clientype=2&captype=&protocol=https&uin=&rand={}'.format(random.random())
+        #url += '&collect=BlSUMIWZKFe2aT-aI6kx_9LIPs5DiH8V90kMGRwVpD_b_VYcpoE78xdI4p-M90sNLPeMPO51XDt51LL-mqHv1ZIrxUnoX3QDNcS9sXlU1ut3k_6aTxJp4P4FaS4nBZARiWGBR00bY0Xnj2OHwC_ZDOWNzQSENGdElQP9fBgs4mE2-ntYyc4Zh5E6K_JkjaGtk2hzz-t3w2DUouk74NwNLUBts3Qh0AFxa4qZ8fO0-ZImf-WDI59sxUW5UHHXGuMAEOtw0J28qmefZyueVpm1PHXP9M6n524sOwP6tVbvd8w4U7nzCZEcrca1LJvs7gwy_hqyOm4q-nmYneodPySjYhlshJjq5IA1UNdOWCULU1mN9NTUecnDE3ETSSYdpaESeX10jCVeRnXwxkMjHokECjjj5XZt-69rTVcXQ_OHVIZ2OjdhVVVp0vlCGvOPRnvpJYnXrKc-RMHH89mOTCaizp_i_3qhK96Z0IZyAwoLLFInx2AhVONLAf7LeJRhiryvhqg34qUDuSwHS1SQWw5VVQ**'
         headers = {
-                "User-Agent": self.user_agent,
-                "Referer": self.referer_url
+                "User-Agent": 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/51.0.2704.79 Safari/537.36', 
+                #self.user_agent,
+                "DNT": "1",
+                "Referer": 'https://ssl.captcha.qq.com/template/placeholder.html?aid=1600000592&captype=&protocol=https&uin=&clientype=2'
                 }
+        try:
+            st = self.start_time
+        except AttributeError:
+            st = self.start_time = time.strftime("%Y%m%d-%H%M%S")
+            
         try:
             req = urllib.request.Request(url, None, headers)
             #res = opener.open(req)
-            res = urllib.request.urlopen(url)
+            #res = urllib.request.urlopen(url)
+            res = self.cap_opener.open(url)
+            self._logger.info('request for cap_union_check_new: %s', url)
+            for ck in self.cap_cookie:
+                self._logger.info('Cookie: {}={}; path={}; domain={}'.format(ck.name, ck.value, ck.path, ck.domain))
         except Exception as err:
             self._logger.error(err)
         else:
@@ -707,6 +815,7 @@ class QQReg(object):
             # response like:
             #  {"state":"1","ticket":"","captype":"1","subcaptype":"7"}
             #
+            print(con)
             
             
     def cap_union_show_new(self):
@@ -718,7 +827,8 @@ class QQReg(object):
         try:
             req = urllib.request.Request(url, None, headers)
             #res = opener.open(req)
-            res = urllib.request.urlopen(url)
+            #res = urllib.request.urlopen(url)
+            res = self.cap_opener.open(url)
         except Exception as err:
             self._logger.error(err)
         else:
@@ -754,7 +864,8 @@ class QQReg(object):
         try:
             req = urllib.request.Request(url, None, headers)
             #res = opener.open(req)
-            res = urllib.request.urlopen(url)
+            #res = urllib.request.urlopen(url)
+            res = self.cap_opener.open(url)
         except Exception as err:
             self._logger.error(err)
         else:
@@ -784,7 +895,8 @@ class QQReg(object):
         try:
             req = urllib.request.Request(url, None, headers)
             #res = opener.open(req)
-            res = urllib.request.urlopen(url)
+            #res = urllib.request.urlopen(url)
+            res = self.cap_opener.open(url)
         except Exception as err:
             self._logger.error(err)
         else:
@@ -854,7 +966,7 @@ class QQReg(object):
             if ec == 0:
                 if elevel == 3:
                     # need to receive sms verify code
-                    self.input_phone()
+                    self.need_reg = self.input_phone()
                 elif elevel == 4:
                     # need to send sms verify codecs
                     self.need_reg = False
@@ -909,7 +1021,7 @@ class QQReg(object):
 
 
 if __name__ == '__main__':
-    qr = QQReg(random=True)
+    qr = QQReg(random=True, captcha='ruokuai', rk_user='zbqf109', rk_pass='a353535')
     
     #print(qr)
    
@@ -917,6 +1029,8 @@ if __name__ == '__main__':
     #qr.input_captcha()
     qr.do_reg()
     #qr._test_cap_union()
+    #qr.init_cap_cookie()
+    #qr.cap_union_check_new()
     
     
     

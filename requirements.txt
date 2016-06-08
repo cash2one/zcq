@@ -5,4 +5,5 @@ Bottle-Sqlalchemy >= 0.4
 pycrypto >= 2.6
 rsa >= 3.4
 sqlalchemy >= 1.0
+murmurhash3 >= 2.3.4
 

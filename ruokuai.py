@@ -51,7 +51,7 @@ class APIClient(object):
         return con.decode()
 
 
-    def http_report_error(self, url, paramDict):
+    def http_report_error(self, url, paramDict, paramKeys):
         timestr = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         boundary = '------------' + hashlib.md5(timestr.encode()).hexdigest().lower()
         boundarystr = '\r\n--%s\r\n'%(boundary)
