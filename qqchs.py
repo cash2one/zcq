@@ -286,6 +286,10 @@ class QQReg(object):
                 f.seek(0, 2)
                 f.write(con)
                 f.write(b'\n\n\n')
+                
+            # "hmenter", "a", "zc.qq.com"
+            cookie_hmenter = self._new_cookie('hmenter', 'a', 'zc.qq.com')
+            self.cookies.set_cookie(cookie_hmenter)
 
     def send_monikey_common(self):
         self.__send_monikey('nick', self.nickname)
@@ -964,6 +968,10 @@ class QQReg(object):
             ec = o["ec"]
             self.elevel = elevel = int(o["elevel"])
             if ec == 0:
+                # add cookie
+                cookie_ec = self._new_cookie('index_ec', ec, '.zc.qq.com')
+                self.cookies.set_cookie(cookie_ec)
+                
                 if elevel == 3:
                     # need to receive sms verify code
                     self.need_reg = self.input_phone()
